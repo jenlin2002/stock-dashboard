@@ -28,7 +28,9 @@
 14. [x] **本人**：Fetch／Pull 後 commit + push（PHASE5V2）
 15. [x] **Claude Code**：Phase 7（查詢任何股票）（2026-10-09，見下方「Phase 7」）
 16. [ ] **本人**：在 Cloudflare 設定環境變數 `FINMIND_TOKEN`、`SEC_USER_AGENT`，然後 commit + push，到網站用搜尋框測試
-17. [ ] **Claude Code**：Phase 8 主畫面與全台股（見下方「Phase 8」），依序 ①～⑤
+17. [ ] **Claude Code**：Phase 8 主畫面與全台股（見下方「Phase 8」），依序 ①～⑥（①②③ 完成；④ 大盤、⑤ 類股資金流向、⑥ 美股總表待做）
+18. [x] **Claude Code**：首頁「＋」加入追蹤、「×」移除（2026-10-10，本人要求）：`functions/api/watchlist.js` 用 GitHub contents API 改 `config/watchlist.json`（檢查 Origin、代號格式；sha 衝突重試一次；台股依代號排序；排版與手寫相同），commit 後觸發排程。前端改完把新清單存在瀏覽器 15 分鐘（網站重新部署前也看得到）；剛加入、還沒資料檔的股票先即時查詢。已用模擬 GitHub API 測過加入、重複加入、移除、中文名稱、錯誤代號、別的網站來源、未設權杖。
+19. [x] **本人**：產生 fine-grained GitHub 權杖，存成 Cloudflare 環境變數 `GITHUB_TOKEN`（2026-10-10 完成）
 
 **給 Claude Code 的規則**
 - 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
@@ -361,6 +363,19 @@ stock-dashboard/
 - 產業名稱以證交所為準，FinMind 補的「金融業」併入「金融保險業」。
 
 **③ 本人追加：PEG 評分卡（2026-10-10）**：仿 Jim Slater《祖魯法則》REFS 卡片（本人提供書頁照片）。個股頁一張卡，每個指標旁兩顆圓圈：**m＝與全市場比、s＝與同產業比**，依該指標在全部股票中的五分位塗滿程度（全黑＝最好的 20%、¾、½、¼、空心＝最差 20%，⊕＝無資料）。方向：本益比、PEG、淨值比、股價營收比越低越好；殖利率、成長率、ROE、毛利率越高越好。台股用近四季實際數字（書上是分析師前瞻預估，需付費資料）。預計指標：股價、市值與排名、近四季 EPS、營收、殖利率、本益比、PEG、EPS 成長率、ROE（＝淨值比 ÷ 本益比）、毛利率、負債比（槓桿）、淨值比、股價營收比、每股淨值。全台股總表另加 PEG 燈號欄。
+
+**③ 完成（2026-10-10）**：
+- `scripts/fundamentals.py`（build_all.py 呼叫）：
+  - **一年前近四季 EPS**：證交所 `rwd/zh/afterTrading/BWIBBU_d`、櫃買 `peratio_analysis/pera_result.php`＋`www/zh-tw/afterTrading/otc`（一年前那天的收盤、本益比、財報年/季）→ 收盤 ÷ 本益比；**只在財報季正好是去年同一季時才比**。約 1,321 家可比。
+  - **資產負債表**：OpenAPI `t187ap07_L_*`／`mopsfin_t187ap07_O_*` → 負債比（負債÷資產）、每股淨值。
+  - **月營收歷史**：公開資訊觀測站 `mopsov.twse.com.tw/nas/t21/{sii,otc}/t21sc03_{民國年}_{月}_{0,1}.html`（0 本國、1 外國 KY），快取在 `data/all/revenue_hist.json`，每次只補新月份並重抓最近兩個月 → 近 12 個月營收、股價營收比；最新月份比 OpenAPI 新就覆蓋月營收欄位。
+- 新欄位：`pe_period, eps_prev, eps_growth, peg, roe, debt_ratio, bvps, rev_ttm, psr`。PEG 只在 **0 < EPS 成長 ≤ 100%** 時計算（超過多為低基期，顯示「基期低」），約 608 家有 PEG。台積電 PEG 0.55、鴻海 1.04、富邦金 0.41、環球晶 1.10。
+- `assets/refs.js` 評分卡：在瀏覽器即時算五分位（全市場、同產業；同業 < 5 家不比；本益比等只比正數）。個股頁「本益成長比評分卡」（台股），左卡右說明；選單「個股分析 → PEG 評分卡」。全台股總表加 PEG（含燈號）、EPS 成長、ROE、營收比、負債比。
+- 排程執行時間約 1.5 分鐘（第一次回補 12 個月營收較久）。
+
+**深色／淺色切換（2026-10-10，本人要求）**：頁首右邊 🌙／☀️ 按鈕，選擇存在 localStorage `theme`，沒選就跟系統；各頁 `<head>` 先套用避免閃爍；圖表與 TradingView 元件跟著重畫（`App.onThemeChange` 同時聽手動切換與系統改變）。
+
+**⑥ 美股總表（本人追加，待規劃）**：選單加「美股總表」，類似全台股總表。需找美股全部股票的批次來源（候選：SEC frames API 一次拿某季全部公司的營收／EPS；股價與市值另找），規劃後再做。
 
 ---
 

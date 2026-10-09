@@ -16,6 +16,7 @@ import time
 
 import requests
 
+import fundamentals
 from common import DATA, load_json, log, today_str, warn
 
 TWSE = "https://openapi.twse.com.tw/v1/"
@@ -30,6 +31,14 @@ FIELDS = [
     "rev_month", "rev", "rev_mom", "rev_yoy", "rev_cum_yoy",    # rev：元
     "eps_period", "eps_ytd", "gross_margin", "op_margin",      # 最新一季累計（年初至今）
     "eps_ttm",                                                 # 近四季 EPS ≈ 收盤 ÷ 本益比（證交所本益比即以近四季 EPS 計）
+    # PEG 與評分卡（scripts/fundamentals.py）
+    "pe_period",                                               # 本益比所用財報季（例 2026Q2）
+    "eps_prev",                                                # 一年前的近四季 EPS（去年同一季財報）
+    "eps_growth",                                              # 近四季 EPS 成長率 %
+    "peg",                                                     # 本益比 ÷ EPS 成長率（EPS ≤ 0 或成長 ≤ 0 不計）
+    "roe",                                                     # 近四季 EPS ÷ 每股淨值 %
+    "debt_ratio", "bvps",                                      # 負債比 %（負債÷資產）、每股淨值
+    "rev_ttm", "psr",                                          # 近 12 個月營收（元）、股價營收比＝市值 ÷ 近 12 個月營收
 ]
 
 session = requests.Session()
@@ -188,7 +197,58 @@ def main():
         if s.get("volume") is not None:
             s["volume"] = int(s["volume"])
 
-    rows = [[s.get(f) for f in FIELDS] for s in sorted(stocks.values(), key=lambda s: s["code"])]
+    # ---- PEG：一年前的近四季 EPS（同一季財報）----
+    latest = max((s["date"] for s in stocks.values() if s.get("date")), default=None)
+    if latest:
+        from datetime import date as _date
+        hist, prev_day = fundamentals.eps_history(_date.fromisoformat(latest))
+        log(f"PEG：比較 {latest} 與 {prev_day} 的近四季 EPS（{sum(1 for h in hist.values() if h['eps_prev'])} 家可比）")
+        for code, h in hist.items():
+            s = stocks.get(code)
+            if s:
+                s.update(h)
+    for s in stocks.values():
+        now, prev, pe = s.get("eps_ttm"), s.get("eps_prev"), s.get("pe")
+        if now and prev and now > 0 and prev > 0:
+            s["eps_growth"] = r2((now / prev - 1) * 100)
+            # 成長超過 100% 多半是去年 EPS 太低（低基期），PEG 會失真，不計算
+            if pe and 0 < s["eps_growth"] <= 100:
+                s["peg"] = r2(pe / s["eps_growth"])
+
+    # ---- 資產負債表：負債比、每股淨值、ROE ----
+    for code, b in fundamentals.balance_sheets().items():
+        s = stocks.get(code)
+        if s:
+            s.update(b)
+    for s in stocks.values():
+        if not s.get("bvps") and s.get("close") and s.get("pb"):
+            s["bvps"] = r2(s["close"] / s["pb"])
+        if s.get("eps_ttm") and s.get("bvps") and s["bvps"] > 0:
+            s["roe"] = r2(s["eps_ttm"] / s["bvps"] * 100)
+
+    # ---- 月營收歷史：近 12 個月營收、股價營收比；最新月份比 OpenAPI 新就用它 ----
+    rh = fundamentals.revenue_history(12)
+    months = sorted(rh)
+    if months:
+        last = months[-1]
+        for code, s in stocks.items():
+            vals = [rh[m].get(code) for m in months]
+            if len(months) == 12 and all(vals):
+                s["rev_ttm"] = int(sum(v[0] for v in vals) * 1000)  # 千元 → 元
+                if s.get("mktcap") and s["rev_ttm"] > 0:
+                    s["psr"] = r2(s["mktcap"] / s["rev_ttm"])
+            cur = rh[last].get(code)
+            if cur and (s.get("rev_month") or "") < last:
+                prev_m = rh[months[-2]].get(code) if len(months) > 1 else None
+                s.update(
+                    rev_month=last, rev=int(cur[0] * 1000),
+                    rev_yoy=r2((cur[0] / cur[1] - 1) * 100) if cur[1] else None,
+                    rev_mom=r2((cur[0] / prev_m[0] - 1) * 100) if prev_m and prev_m[0] else None,
+                    rev_cum_yoy=r2((cur[2] / cur[3] - 1) * 100) if cur[2] and cur[3] else None,
+                )
+        log(f"月營收歷史：{months[0]}～{last}")
+
+    rows =[[s.get(f) for f in FIELDS] for s in sorted(stocks.values(), key=lambda s: s["code"])]
     out = {"updated": today_str(), "fields": FIELDS, "rows": rows}
     path = DATA / "all" / "stocks.json"
     path.parent.mkdir(parents=True, exist_ok=True)

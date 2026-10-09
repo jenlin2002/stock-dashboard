@@ -144,9 +144,23 @@
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
 
-  // 系統深淺色切換時呼叫 fn
+  // ---------- 深色／淺色 ----------
+  // 手動選擇存在 localStorage "theme"（"dark" / "light"），沒選就跟系統。各頁 <head> 有一小段先套用，避免閃一下。
+  const darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
+  function isDark() {
+    const t = document.documentElement.dataset.theme;
+    return t ? t === "dark" : darkMQ.matches;
+  }
+  function setTheme(t) {
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem("theme", t); } catch (e) {}
+    document.dispatchEvent(new Event("themechange"));
+  }
+
+  // 深淺色改變時呼叫 fn（手動切換或系統改變都算）
   function onThemeChange(fn) {
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", fn);
+    document.addEventListener("themechange", fn);
+    darkMQ.addEventListener("change", () => { if (!document.documentElement.dataset.theme) fn(); });
   }
 
   function esc(s) {
@@ -155,6 +169,6 @@
 
   window.App = {
     loadJSON, loadWatchlist, editWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadStockList, lookupStock, searchStocks,
-    isNum, fmtNum, fmtPrice, fmtRevenue, revenueUnit, fmtPct, upDown, cssVar, onThemeChange, esc,
+    isNum, fmtNum, fmtPrice, fmtRevenue, revenueUnit, fmtPct, upDown, cssVar, onThemeChange, isDark, setTheme, esc,
   };
 })();

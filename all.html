@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>全台股總表｜台美股看盤</title>
+<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -51,6 +52,7 @@
 <script src="assets/app.js"></script>
 <script src="assets/layout.js"></script>
 <script src="assets/search.js"></script>
+<script src="assets/refs.js"></script>
 <script>
 (async function () {
   const yi = (x) => (App.isNum(x) ? App.fmtNum(x / 1e8, x >= 1e11 ? 0 : 1) : "—");  // 元 → 億
@@ -66,9 +68,14 @@
     { k: "volume", t: "成交量(張)", f: (s) => App.fmtNum(s.volume) },
     { k: "mktcap", t: "市值(億)", f: (s) => yi(s.mktcap) },
     { k: "pe", t: "本益比", asc: true, f: (s) => App.fmtNum(s.pe, 2) },
-    { k: "peg", t: "PEG", asc: true, f: (s) => App.fmtNum(s.peg, 2) },
+    { k: "peg", t: "PEG", asc: true, f: (s) => (App.isNum(s.peg) ? App.fmtNum(s.peg, 2) + " " + Refs.dot(pegLv[s.code], "PEG 和全市場比")
+      : s.eps_growth > 100 ? '<span class="updated" title="EPS 成長超過 100%，多半是去年基期太低，PEG 不計算">基期低</span>' : "—") },
+    { k: "eps_growth", t: "EPS成長", f: (s) => pctCell(s.eps_growth) },
+    { k: "roe", t: "ROE", f: (s) => App.fmtPct(s.roe) },
     { k: "yield", t: "殖利率", f: (s) => App.fmtPct(s.yield) },
     { k: "pb", t: "淨值比", asc: true, f: (s) => App.fmtNum(s.pb, 2) },
+    { k: "psr", t: "營收比", asc: true, f: (s) => App.fmtNum(s.psr, 2) },
+    { k: "debt_ratio", t: "負債比", asc: true, f: (s) => App.fmtPct(s.debt_ratio) },
     { k: "rev", t: "月營收(億)", f: (s) => yi(s.rev) },
     { k: "rev_yoy", t: "營收YoY", f: (s) => pctCell(s.rev_yoy) },
     { k: "rev_cum_yoy", t: "累計YoY", f: (s) => pctCell(s.rev_cum_yoy) },
@@ -86,6 +93,7 @@
     return;
   }
   const all = data.rows.map((r) => Object.fromEntries(data.fields.map((f, i) => [f, r[i]])));
+  const pegLv = Refs.levelsFor(all, "peg");  // PEG 的全市場五分位燈號
   const industryView = new URLSearchParams(location.search).get("view") === "industry";
   if (industryView) document.getElementById("title").textContent = "全台股總表・依產業";
 
@@ -205,7 +213,8 @@
   const dates = all.map((s) => s.date).filter(Boolean).sort();
   document.getElementById("foot").textContent =
     "收盤 " + (dates[dates.length - 1] || "—") + "・月營收 " + (revMonth || "—") + "（官方彙總較個股公布晚幾天）・資料更新 " + data.updated +
-    "。近四季 EPS＝股價 ÷ 本益比；今年 EPS 為今年以來累計（Q 後數字為最新季別）；毛利率、營益率為今年以來累計，金融業不適用。PEG 待 EPS 歷史回補後提供。";
+    "。近四季 EPS＝股價 ÷ 本益比；EPS 成長＝近四季 EPS 對一年前的近四季 EPS；PEG＝本益比 ÷ EPS 成長（虧損、衰退不計；成長超過 100% 多為低基期，標「基期低」不計），圓圈為全市場五分位（全滿＝最便宜的 20%）；" +
+    "ROE＝近四季 EPS ÷ 每股淨值；營收比＝市值 ÷ 近 12 個月營收；負債比＝負債 ÷ 資產；今年 EPS、毛利率、營益率為今年以來累計，金融業沒有毛利率。";
   render();
 })();
 </script>

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>個股｜台美股看盤</title>
+<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -22,6 +23,26 @@
   </div>
   <div class="quote" id="quote"></div>
   <div class="live-note" id="live-note" hidden></div>
+
+  <section class="panel" id="p-refs" hidden>
+    <h3>本益成長比評分卡</h3>
+    <div class="refs-wrap">
+      <div id="refs"></div>
+      <div class="refs-help">
+        每個指標旁兩顆圓圈：<b>m</b>＝和全市場（約 1,950 家）比，<b>s</b>＝和同產業比。<br>
+        <span class="refs-dot" style="--f:100%"></span>全滿＝最強的 20%
+        <span class="refs-dot" style="--f:75%"></span>前段
+        <span class="refs-dot" style="--f:50%"></span>中段
+        <span class="refs-dot" style="--f:25%"></span>後段
+        <span class="refs-dot"></span>空心＝最弱的 20%<br>
+        <span class="refs-dot na">⊕</span>沒有資料（例如虧損時沒有本益比）　<span class="refs-dot few"></span>同業少於 5 家不比較<br><br>
+        <b>越低越好</b>：本益比、PEG、負債比、股價淨值比、股價營收比。<b>越高越好</b>：殖利率、EPS 成長率、股東權益報酬率、毛利率。<br>
+        <b>PEG</b>＝本益比 ÷ EPS 成長率（近四季 EPS 對一年前的近四季 EPS）；小於 1 通常代表成長相對便宜。EPS 為負或衰退時不計算；成長超過 100% 多半是去年基期太低，標「基期低」也不計算。<br>
+        數字都是<b>實際</b>的近四季資料（書上 REFS 用分析師預估，台股沒有免費預估資料）。毛利率、營益率是今年以來累計；金融業沒有毛利率。<br>
+        滑鼠移到圓圈上可以看說明。資料每個交易日收盤後更新。
+      </div>
+    </div>
+  </section>
 
   <section class="panel" id="p-kline">
     <h3>K 線（日）</h3>
@@ -86,6 +107,7 @@
 <script src="assets/widgets.js"></script>
 <script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
+<script src="assets/refs.js"></script>
 <script>
 (async function () {
   const params = new URLSearchParams(location.search);
@@ -120,6 +142,7 @@
 
   TV.fundamentals(document.getElementById("w-fund"), item);
   TV.profile(document.getElementById("w-profile"), item);
+  if (item.code) Refs.render(document.getElementById("refs"), item.code).then((ok) => { document.getElementById("p-refs").hidden = !ok; });
 
   // 追蹤清單的股票讀排程抓好的檔案；其他股票（或檔案還沒產生）即時查詢
   let d = null;

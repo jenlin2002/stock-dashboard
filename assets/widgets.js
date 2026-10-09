@@ -24,7 +24,7 @@
   }
 
   function theme() {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return App.isDark() ? "dark" : "light";
   }
 
   function showNoData(host, symbol) {
@@ -56,7 +56,7 @@
   // 主題跟隨系統：切換時重畫所有 widget
   const renderers = [];
   function register(fn) { renderers.push(fn); fn(); }
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => renderers.forEach((fn) => fn()));
+  App.onThemeChange(() => renderers.forEach((fn) => fn()));
 
   // TradingView 完整圖表頁（用本人的登入、付費功能和自訂指標）
   function chartUrl(item) {

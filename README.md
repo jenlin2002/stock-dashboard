@@ -29,7 +29,18 @@ Cloudflare → Workers & Pages → `stock-dashboard` → Settings → **Variable
 
 ## 新增或移除股票（追蹤清單）
 
-只要改 **`config/watchlist.json`** 這一個檔案。
+**最簡單：在網站上操作。** 首頁「我的追蹤」每一區最後有「＋」卡片，搜尋代號或名稱後點一下就加入；卡片右上角「×」移除。
+網站會透過 `functions/api/watchlist.js` 直接修改 GitHub 上的 `config/watchlist.json`（commit 作者是你的權杖），接著自動觸發排程抓資料，約 2～3 分鐘後有完整資料；在那之前卡片先用即時查詢顯示。
+
+需要在 Cloudflare 設定 `GITHUB_TOKEN`（只給這個 repo 的 Contents 讀寫權限）：
+1. GitHub → 右上角頭像 → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token。
+2. Repository access 選 **Only select repositories** → `stock-dashboard`；Permissions → Repository permissions → **Contents：Read and write**。
+3. 產生後複製權杖，貼到 Cloudflare → `stock-dashboard` → Settings → Variables and Secrets → `GITHUB_TOKEN`（類型 Secret）。
+4. 權杖有到期日，到期後網站加入股票會失敗，重新產生一把換上即可。
+
+> 網站改清單也是一個 commit，所以在 GitHub Desktop 推送前一樣要先 **Fetch → Pull**。
+
+也可以手動改 **`config/watchlist.json`**：
 
 ```json
 {
@@ -149,6 +160,7 @@ data/all/stocks.json         全台股總表（排程產生，scripts/build_all.
 all.html                     全台股總表頁（依股號、依產業）
 assets/layout.js             共用版面：左側選單＋右側內容
 functions/api/stock.js       Cloudflare Pages Function：即時查詢不在清單裡的股票
+functions/api/watchlist.js   Cloudflare Pages Function：網站上「＋／×」修改 GitHub 上的追蹤清單
 scripts/                     抓資料的 Python 程式
 assets/                      網頁共用的 CSS、JavaScript（app、charts、indicators、widgets）
 tradingview/                 TradingView 用的 Pine Script

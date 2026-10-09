@@ -8,7 +8,7 @@
     { icon: "💰", label: "類股資金流向", href: "flow.html", ready: false, subs: [["類股成交比重", "#share"], ["法人進出排行", "#rank"]] },
     { icon: "📋", label: "全台股總表", href: "all.html", ready: true, subs: [["依股號", "all.html"], ["依產業", "all.html?view=industry"]] },
     { icon: "🔍", label: "個股分析", href: "stock.html?symbol=" + encodeURIComponent(lastSymbol), page: "stock", ready: true,
-      subs: [["K 線・指標", "#p-kline"], ["月營收", "#p-revenue"], ["季度財報", "#p-quarterly"], ["股利", "#p-div"]] },
+      subs: [["PEG 評分卡", "#p-refs"], ["K 線・指標", "#p-kline"], ["月營收", "#p-revenue"], ["季度財報", "#p-quarterly"], ["股利", "#p-div"]] },
     { icon: "⭐", label: "我的追蹤", href: "index.html", ready: true, subs: [["追蹤清單", "index.html"], ["比較表", "compare.html"]] },
   ];
 
@@ -65,6 +65,20 @@
     btn.setAttribute("aria-expanded", String(open));
   };
   btn.addEventListener("click", () => setOpen(!document.body.classList.contains("menu-open")));
+
+  // 深色／淺色切換（頁首最右邊）
+  const tb = document.createElement("button");
+  tb.type = "button";
+  tb.className = "theme-btn";
+  const paint = () => {
+    const dark = App.isDark();
+    tb.textContent = dark ? "☀️" : "🌙";
+    tb.title = tb.ariaLabel = dark ? "切換成淺色" : "切換成深色";
+  };
+  tb.addEventListener("click", () => App.setTheme(App.isDark() ? "light" : "dark"));
+  App.onThemeChange(paint);
+  paint();
+  header.appendChild(tb);
   layout.addEventListener("click", (e) => {
     if (!document.body.classList.contains("menu-open")) return;
     if (!aside.contains(e.target) || e.target.closest("a")) setOpen(false);

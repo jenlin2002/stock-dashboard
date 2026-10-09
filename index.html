@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>台美股看盤</title>
+<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -20,6 +21,16 @@
   <h2>美股</h2>
   <div class="grid" id="us"></div>
 </main>
+
+<dialog id="add-dlg" aria-labelledby="add-title">
+  <form method="dialog" class="dlg">
+    <h3 id="add-title">加入追蹤</h3>
+    <input type="search" id="add-q" placeholder="輸入代號或名稱，例：2454、聯發科、TSLA" autocomplete="off" aria-label="輸入代號或名稱">
+    <ul id="add-list" class="pick-list"></ul>
+    <p id="add-msg" class="updated" role="status"></p>
+    <div class="dlg-foot"><button class="btn" value="cancel">關閉</button></div>
+  </form>
+</dialog>
 
 <footer>
   資料僅供參考，不構成投資建議。資料來源：TradingView、FinMind、公開資訊觀測站、SEC、Yahoo Finance。
@@ -40,18 +51,83 @@
   }
   ownTape(document.getElementById("tape"));
 
-  function addCards(list, el) {
-    if (!list.length) { el.innerHTML = '<p class="msg">清單是空的。</p>'; return; }
+  function addCards(list, el, m) {
     for (const item of list) {
       const sym = App.symbolOf(item);
       const a = document.createElement("a");
       a.className = "card";
-      a.href = "stock.html?symbol=" + encodeURIComponent(sym);
-      a.innerHTML = '<div class="card-head"><strong></strong><span></span></div><div class="mini"></div>';
+      a.href = "stock.html?symbol=" + encodeURIComponent(sym) + "&m=" + m;
+      a.innerHTML = '<div class="card-head"><strong></strong><span></span></div><div class="mini"></div>' +
+        '<button type="button" class="rm" title="從追蹤清單移除">×</button>';
       a.querySelector("strong").textContent = item.name;
       a.querySelector("span").textContent = sym;
+      a.querySelector(".rm").setAttribute("aria-label", "從追蹤清單移除 " + item.name);
+      a.querySelector(".rm").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); removeStock(m, item, a); });
       el.appendChild(a);
       ownMini(a.querySelector(".mini"), item);
+    }
+    // 最後一格是「＋」：加入新的追蹤股票
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "card add-card";
+    add.innerHTML = '<span class="plus">＋</span><span>加入' + (m === "tw" ? "台股" : "美股") + "</span>";
+    add.addEventListener("click", () => openAdd(m));
+    el.appendChild(add);
+  }
+
+  // ---------- 加入／移除（寫回 GitHub 上的 config/watchlist.json） ----------
+  const dlg = document.getElementById("add-dlg"), addQ = document.getElementById("add-q");
+  const addList = document.getElementById("add-list"), addMsg = document.getElementById("add-msg");
+  let addMarket = "tw", picks = [], busy = false;
+  function openAdd(m) {
+    addMarket = m;
+    addQ.value = "";
+    addList.innerHTML = "";
+    addMsg.textContent = m === "tw" ? "台股上市、上櫃都可以加入。" : "美股 Nasdaq、NYSE 都可以加入。";
+    dlg.showModal();
+    addQ.focus();
+    App.loadStockList().catch(() => {});
+  }
+  let st;
+  addQ.addEventListener("input", () => { clearTimeout(st); st = setTimeout(searchAdd, 120); });
+  addQ.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (picks[0]) addStock(picks[0]); } });
+  async function searchAdd() {
+    const q = addQ.value.trim();
+    if (!q) { addList.innerHTML = ""; return; }
+    const res = (await App.searchStocks(q, 40)).filter((r) => r.m === addMarket).slice(0, 8);
+    if (addQ.value.trim() !== q) return;
+    picks = res;
+    const have = new Set((addMarket === "tw" ? w.tw : w.us).map((x) => App.symbolOf(x).toUpperCase()));
+    addList.innerHTML = res.length ? res.map((r, i) =>
+      '<li><button type="button" data-i="' + i + '"' + (have.has(r.symbol) ? " disabled" : "") + "><b>" + App.esc(r.symbol) + "</b> " + App.esc(r.name) +
+      ' <span>' + App.esc(r.tag) + (have.has(r.symbol) ? "・已在清單" : "") + "</span></button></li>").join("") : '<li class="empty">找不到符合的股票</li>';
+  }
+  addList.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-i]");
+    if (b && !b.disabled) addStock(picks[+b.dataset.i]);
+  });
+  async function addStock(r) {
+    if (busy) return;
+    busy = true;
+    addMsg.textContent = "加入 " + r.symbol + " " + r.name + " 中…";
+    try {
+      await App.editWatchlist("add", r.m, r.item);
+      addMsg.textContent = "已加入 " + r.symbol + " " + r.name + "。完整資料約 2～3 分鐘後產生，之後每天自動更新。";
+      setTimeout(() => location.reload(), 1200);
+    } catch (err) {
+      addMsg.textContent = "⚠ " + err.message;
+      busy = false;
+    }
+  }
+  async function removeStock(m, item, card) {
+    if (!confirm("從追蹤清單移除「" + item.name + "（" + App.symbolOf(item) + "）」？")) return;
+    card.classList.add("busy");
+    try {
+      await App.editWatchlist("remove", m, item);
+      card.remove();
+    } catch (err) {
+      card.classList.remove("busy");
+      alert(err.message);
     }
   }
 
@@ -72,10 +148,13 @@
     host.querySelectorAll('[aria-hidden="true"] a').forEach((a) => a.tabIndex = -1);
   }
 
-  // 卡片：用自己的日 K 資料畫近一年走勢（紅漲綠跌）；沒有資料檔時退回 TradingView
+  // 卡片：用自己的日 K 資料畫近一年走勢（紅漲綠跌）
+  // 剛加入、排程還沒產生資料檔的股票先即時查詢；都失敗才退回 TradingView
   async function ownMini(host, item) {
     let d;
-    try { d = await App.loadStockData(item); } catch (e) { return TV.miniOverview(host, item); }
+    try { d = await App.loadStockData(item); } catch (e) {
+      try { d = await App.loadLiveData(item); } catch (e2) { return TV.miniOverview(host, item); }
+    }
     const c = d.price.close.slice(-250), dates = d.price.dates.slice(-250), n = c.length;
     if (n < 2) return TV.miniOverview(host, item);
     const diff = c[n - 1] - c[n - 2], pct = diff / c[n - 2] * 100;
@@ -93,8 +172,8 @@
       "</div>";
   }
 
-  addCards(w.tw, document.getElementById("tw"));
-  addCards(w.us, document.getElementById("us"));
+  addCards(w.tw, document.getElementById("tw"), "tw");
+  addCards(w.us, document.getElementById("us"), "us");
 })();
 </script>
 </body>

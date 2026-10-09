@@ -13,8 +13,24 @@
   --series-3: #ae3ec9;  /* 第二條折線（營益率） */
   color-scheme: light;
 }
+/* 深色：手動選深色（html[data-theme="dark"]），或沒手動選、系統是深色時 */
+:root[data-theme="dark"] {
+  --bg: #111418;
+  --card: #1a1e23;
+  --text: #e6e8eb;
+  --muted: #9aa1a9;
+  --border: #2b3036;
+  --accent: #5b8cff;
+  --up: #ff6b6b;
+  --down: #40c074;
+  --grid: #262b31;
+  --series-1: #748ffc;
+  --series-2: #ffa94d;
+  --series-3: #da77f2;
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #111418;
     --card: #1a1e23;
     --text: #e6e8eb;
@@ -30,6 +46,8 @@
     color-scheme: dark;
   }
 }
+.theme-btn { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 6px; font-size: 16px; line-height: 1; padding: 5px 8px; cursor: pointer; }
+.theme-btn:hover { border-color: var(--accent); }
 .up { color: var(--up); }
 .down { color: var(--down); }
 
@@ -180,6 +198,40 @@ h2:first-child { margin-top: 4px; }
 }
 .msg { color: var(--muted); padding: 24px 0; }
 
+/* 首頁：「＋」加入卡、卡片右上角「×」移除 */
+.card { position: relative; }
+.card .rm {
+  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--card); color: var(--muted); font-size: 16px; line-height: 1;
+  cursor: pointer; opacity: 0; transition: opacity .15s;
+}
+.card:hover .rm, .card .rm:focus-visible { opacity: 1; }
+@media (hover: none) { .card .rm { opacity: .7; } }   /* 手機沒有滑鼠移上去，直接顯示 */
+.card .rm:hover { color: var(--up); border-color: var(--up); }
+.card.busy { opacity: .4; pointer-events: none; }
+.card-head span { margin-right: 26px; }
+.add-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 262px; border: 2px dashed var(--border); background: transparent; color: var(--muted);
+  font: inherit; font-size: 15px; cursor: pointer;
+}
+.add-card .plus { font-size: 44px; line-height: 1; font-weight: 300; }
+.add-card:hover { border-color: var(--accent); color: var(--accent); }
+dialog { border: 1px solid var(--border); border-radius: 12px; padding: 0; background: var(--card); color: var(--text); width: min(480px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.dlg { padding: 18px; }
+.dlg h3 { margin: 0 0 12px; font-size: 17px; }
+.dlg input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+.pick-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.pick-list button {
+  width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 14px; cursor: pointer;
+}
+.pick-list button:hover:not(:disabled) { background: var(--bg); }
+.pick-list button:disabled { color: var(--muted); cursor: default; }
+.pick-list span { color: var(--muted); font-size: 12px; }
+.pick-list .empty { color: var(--muted); padding: 8px 10px; font-size: 14px; }
+.dlg-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
+
 /* 首頁：上市股票用自己的資料畫的小卡 */
 .own-mini { display: flex; flex-direction: column; height: 100%; padding: 8px 14px 10px; }
 .own-mini .px { font-size: 26px; font-weight: 600; }
@@ -221,6 +273,32 @@ th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--bo
 th:first-child, td:first-child, th.l, td.l { text-align: left; }
 th { color: var(--muted); font-weight: 500; }
 tbody tr:last-child td { border-bottom: 0; }
+
+/* 本益成長比評分卡（仿 REFS）：圓圈由下往上塗滿，--f 是塗滿比例 */
+.refs-wrap { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; gap: 18px; padding: 14px; align-items: start; }
+.refs-card { border: 2px solid var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.refs-title { text-align: center; font-size: 19px; font-weight: 700; padding: 12px 8px; border-bottom: 1px solid var(--text); }
+.refs-title small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.refs-sec { padding: 8px 12px; border-bottom: 1px solid var(--text); }
+.refs-sec:last-child { border-bottom: 0; }
+.refs-price { display: flex; justify-content: space-between; align-items: center; }
+.refs-price small { color: var(--muted); }
+.refs-price b { font-size: 30px; }
+.refs-row { display: flex; justify-content: space-between; gap: 10px; line-height: 1.7; }
+.refs-row span:last-child { text-align: right; }
+.refs-grid { display: grid; grid-template-columns: 1fr auto 20px 20px; gap: 5px 8px; align-items: center; }
+.refs-h { text-align: center; font-size: 12px; color: var(--muted); line-height: 1; }
+.refs-v { text-align: right; white-space: nowrap; }
+.refs-dot {
+  display: inline-block; width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--text); justify-self: center;
+  background: linear-gradient(to top, var(--text) var(--f, 0%), transparent var(--f, 0%));
+}
+.refs-dot.na { border: 0; background: none; font-size: 17px; line-height: 17px; text-align: center; color: var(--muted); }
+.refs-dot.few { border-style: dashed; border-color: var(--muted); }
+.refs-help { font-size: 14px; color: var(--muted); line-height: 1.8; }
+.refs-help b { color: var(--text); }
+.refs-help .refs-dot { vertical-align: -3px; margin-right: 2px; }
+@media (max-width: 760px) { .refs-wrap { grid-template-columns: 1fr; } }
 
 /* 全台股總表：表格自己捲動，表頭固定在上、代號名稱固定在左 */
 .content > main.wide { max-width: none; }
