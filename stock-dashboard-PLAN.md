@@ -6,9 +6,10 @@
 - [x] 在 claude.ai 完成資料來源評估與本計畫
 - [x] 建立 GitHub repo `jenlin2002/stock-dashboard`（設為 Private）
 - [x] 上傳本計畫檔到 repo 根目錄
+- [x] 2026-10-09 改在 Claude 桌面 App（家裡電腦）作業；repo 用 GitHub Desktop clone 到 `H:\githubdata\stock-dashboard`
 
 **接下來（依序）**
-1. [ ] **Claude Code**：實作 Phase 1（TradingView 看盤頁），完成後停下來說明如何測試
+1. [x] **Claude Code**：實作 Phase 1（TradingView 看盤頁），完成後停下來說明如何測試（2026-10-09 完成，見 Phase 1「實測結果」）
 2. [ ] **本人**：測試 Phase 1；確認後讓 Claude Code 把變更合併到 `main` 分支（若是 Pull Request，到 GitHub → Pull requests → Merge）
 3. [ ] **本人**：照下方「Cloudflare 設定」部署網站並加上 Access 登入保護
 4. [ ] **本人**：到 finmindtrade.com 註冊取得 token，存入 GitHub repo → Settings → Secrets and variables → Actions → `FINMIND_TOKEN`
@@ -115,6 +116,14 @@ stock-dashboard/
 - 部分台股在某些 Widget 可能沒有資料，要顯示「此項目無資料」，不能讓整頁壞掉。
 
 **驗收**：首頁看得到所有股票，點進個股頁四個 Widget 都正常顯示。
+
+**實測結果（2026-10-09）**
+- TradingView 免費 Widget **不提供上市（TWSE）股價**：報價、K 線、Mini Chart 都只顯示「此商品僅在TradingView上可用」。上櫃（TPEX）和美股正常；基本面、公司簡介上市股票也有資料。
+- 因為讀不到 iframe 內容，改用市場判斷（`widgets.js` 的 `hasPrice`）：上市股票的股價類 Widget 顯示提示和「在 TradingView 開啟」連結，Ticker Tape 不放上市股票。
+- TradingView 已沒有獨立的 Financials Widget（與 Fundamental Data 是同一個），個股頁上方改用 *Symbol Info* 報價 Widget。四個 Widget 為：Symbol Info、Advanced Chart、Fundamental Data、Company Profile。
+- 頁尾免責聲明與資料來源已先加上（原屬 Phase 6）。
+- **Phase 5 待辦**：上市股票的股價圖改用 Phase 2 抓的 FinMind 日 K 自己畫（例如 TradingView 開源的 lightweight-charts）。
+- 本機預覽：在 repo 根目錄執行 `python -m http.server 8540`，開 http://localhost:8540。
 
 ---
 

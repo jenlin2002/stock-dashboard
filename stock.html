@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>個股｜台美股看盤</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1><a href="index.html">台美股看盤</a></h1>
+  <nav><a href="index.html">← 追蹤清單</a></nav>
+</header>
+
+<main id="main">
+  <div class="stock-head">
+    <h2 id="name">載入中…</h2>
+    <span class="tag" id="tag"></span>
+  </div>
+
+  <section class="panel">
+    <div class="body info-body" id="w-info"></div>
+  </section>
+  <section class="panel">
+    <h3>K 線</h3>
+    <div class="body chart-body" id="w-chart"></div>
+  </section>
+  <div class="two-col">
+    <section class="panel">
+      <h3>基本面</h3>
+      <div class="body" id="w-fund"></div>
+    </section>
+    <section class="panel">
+      <h3>公司簡介</h3>
+      <div class="body" id="w-profile"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  資料僅供參考，不構成投資建議。資料來源：TradingView、TWSE、TPEx、FinMind、SEC。
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/widgets.js"></script>
+<script>
+(async function () {
+  const symbol = new URLSearchParams(location.search).get("symbol");
+  const main = document.getElementById("main");
+  let item = null;
+  try {
+    item = App.findStock(await App.loadWatchlist(), symbol);
+  } catch (e) { /* 讀不到清單時，下面依代號格式自行判斷 */ }
+
+  if (!item && symbol) {
+    // 不在追蹤清單：純數字當上市台股，其餘當 NASDAQ 美股
+    item = /^\d{4,6}$/.test(symbol)
+      ? { code: symbol, name: symbol, market: "TWSE" }
+      : { ticker: symbol.toUpperCase(), name: symbol.toUpperCase(), exchange: "NASDAQ" };
+  }
+  if (!item) {
+    main.innerHTML = '<p class="msg">沒有指定股票代號。請從<a href="index.html">追蹤清單</a>進入。</p>';
+    return;
+  }
+
+  document.getElementById("name").textContent = item.name;
+  document.getElementById("tag").textContent = TV.tvSymbol(item);
+  document.title = item.name + "｜台美股看盤";
+
+  TV.symbolInfo(document.getElementById("w-info"), item);
+  TV.advancedChart(document.getElementById("w-chart"), item);
+  TV.fundamentals(document.getElementById("w-fund"), item);
+  TV.profile(document.getElementById("w-profile"), item);
+})();
+</script>
+</body>
+</html>

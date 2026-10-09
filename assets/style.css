@@ -1,0 +1,113 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1c2024;
+  --muted: #646b73;
+  --border: #e2e5e9;
+  --accent: #2962ff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --card: #1a1e23;
+    --text: #e6e8eb;
+    --muted: #9aa1a9;
+    --border: #2b3036;
+    --accent: #5b8cff;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  line-height: 1.5;
+}
+a { color: var(--accent); }
+
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { font-size: 18px; margin: 0; }
+.topbar h1 a { color: inherit; text-decoration: none; }
+.topbar nav { margin-left: auto; display: flex; gap: 14px; font-size: 14px; }
+.topbar nav a { text-decoration: none; }
+
+.tape { border-bottom: 1px solid var(--border); min-height: 46px; }
+
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+h2 { font-size: 17px; margin: 24px 0 12px; }
+h2:first-child { margin-top: 4px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.card {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color .15s;
+}
+.card:hover { border-color: var(--accent); }
+.card-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 14px 0;
+}
+.card-head strong { font-size: 16px; }
+.card-head span { color: var(--muted); font-size: 13px; }
+.card .mini { height: 220px; position: relative; }
+/* 卡片上的 widget 不攔截點擊，整張卡片都能點進個股頁 */
+.card .mini iframe { pointer-events: none; }
+
+.stock-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.stock-head h2 { margin: 0; font-size: 22px; }
+.stock-head .tag { color: var(--muted); font-size: 14px; }
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.panel > h3 { font-size: 15px; margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.panel .body { position: relative; }
+.chart-body { height: 520px; }
+.info-body { min-height: 180px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.two-col .body { height: 500px; }
+
+.tradingview-widget-container, .tradingview-widget-container__widget { height: 100%; width: 100%; }
+.tradingview-widget-copyright { display: none; }
+
+.nodata {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  height: 100%; min-height: 120px;
+  color: var(--muted); font-size: 14px; text-align: center;
+}
+.msg { color: var(--muted); padding: 24px 0; }
+
+footer {
+  max-width: 1200px; margin: 24px auto 0; padding: 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .two-col { grid-template-columns: 1fr; }
+  .chart-body { height: 420px; }
+  .two-col .body { height: 460px; }
+  .topbar h1 { font-size: 16px; }
+}
