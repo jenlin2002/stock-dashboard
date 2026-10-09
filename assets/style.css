@@ -54,7 +54,10 @@ a { color: var(--accent); }
 .topbar nav { margin-left: auto; display: flex; gap: 14px; font-size: 14px; }
 .topbar nav a { text-decoration: none; }
 
-.tape { border-bottom: 1px solid var(--border); min-height: 46px; }
+.tape { border-bottom: 1px solid var(--border); min-height: 46px; background: var(--card); }
+.own-tape { display: flex; gap: 22px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; font-size: 14px; }
+.own-tape a { color: var(--text); text-decoration: none; }
+.own-tape a:hover b { color: var(--accent); }
 
 main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 h2 { font-size: 17px; margin: 24px 0 12px; }
@@ -135,6 +138,15 @@ h2:first-child { margin-top: 4px; }
 .btn:hover { border-color: var(--accent); }
 
 .two-col.charts-2 .body { height: 300px; }
+.sub-body { height: 150px; border-top: 1px solid var(--border); }
+.kctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px 0; font-size: 13px; }
+.kctl label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.kctl label i, .dot { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.kctl .seg { margin-left: auto; }
+.kctl .seg button { padding: 3px 10px; font-size: 13px; }
+.klegend { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 6px 14px; font-size: 12px; color: var(--muted); min-height: 30px; font-variant-numeric: tabular-nums; }
+.klegend b { font-weight: 600; }
+#t-deduct table { font-size: 13px; border-top: 1px solid var(--border); }
 .canvas-body { height: 300px; padding: 10px 12px 12px; }
 .note { color: var(--muted); font-size: 12px; padding: 0 14px 10px; }
 

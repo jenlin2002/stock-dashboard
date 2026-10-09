@@ -17,57 +17,159 @@
     klines = [];
   }
 
-  // ---------- K 線（上市股票 TradingView 不給，改用 FinMind 日 K） ----------
+  // ---------- K 線＋技術指標（所有股票都用自己的日 K 資料） ----------
 
-  function movingAverage(close, dates, n) {
-    const out = [];
-    let sum = 0;
-    for (let i = 0; i < close.length; i++) {
-      sum += close[i];
-      if (i >= n) sum -= close[i - n];
-      if (i >= n - 1) out.push({ time: dates[i], value: +(sum / n).toFixed(2) });
-    }
-    return out;
-  }
+  // 均線顏色避開紅綠（紅綠代表漲跌）
+  const MAS = [8, 21, 55, 89];  // 本人指定的均線
+  const MA_COLORS = { 8: "#f59f00", 21: "#22b8cf", 55: "#1c7ed6", 89: "#ae3ec9" };
+  const VOL_MA = [5, 13, 34];   // 本人指定的均量
+  const VOL_COLORS = { 5: "#f59f00", 13: "#22b8cf", 34: "#ae3ec9" };
+  const SUB_COLORS = ["#f59f00", "#1c7ed6"];
+  const DMI_N = 13;
 
-  function kline(host, d) {
-    const p = d.price;
-    const up = v("--up"), down = v("--down"), muted = v("--muted"), grid = v("--grid");
-    host.innerHTML = "";
-    const chart = LightweightCharts.createChart(host, {
+  function chartOptions(extra) {
+    return Object.assign({
       autoSize: true,
-      layout: { background: { type: "solid", color: v("--card") }, textColor: muted, fontSize: 12 },
-      grid: { vertLines: { color: grid }, horzLines: { color: grid } },
-      rightPriceScale: { borderColor: v("--border") },
+      layout: { background: { type: "solid", color: v("--card") }, textColor: v("--muted"), fontSize: 12 },
+      grid: { vertLines: { color: v("--grid") }, horzLines: { color: v("--grid") } },
+      rightPriceScale: { borderColor: v("--border"), minimumWidth: 72 },  // 主圖、副圖右側同寬才對得齊
       timeScale: { borderColor: v("--border") },
       localization: { locale: "zh-TW" },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    });
+    }, extra || {});
+  }
+
+  // 陣列 → lightweight-charts 資料；null 的位置放空白點，讓主圖、副圖的 K 棒序號一致
+  function series(dates, arr, digits) {
+    return dates.map((t, i) => (arr[i] == null ? { time: t } : { time: t, value: +arr[i].toFixed(digits == null ? 2 : digits) }));
+  }
+
+  function line(chart, color, extra) {
+    return chart.addLineSeries(Object.assign({
+      color: color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    }, extra || {}));
+  }
+
+  // opts：{ ma: [5, 20, 60], deduct: true, sub: "kd" | "macd" | "none" }
+  // 回傳 { legend(i) } 讓頁面顯示游標所在那天的數值
+  function kline(host, subHost, d, opts) {
+    const p = d.price, n = p.dates.length;
+    const up = v("--up"), down = v("--down");
+    host.innerHTML = "";
+    subHost.innerHTML = "";
+    const chart = LightweightCharts.createChart(host, chartOptions());
+    klines.push(chart);
+
     const candle = chart.addCandlestickSeries({
       upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down,
     });
     candle.priceScale().applyOptions({ scaleMargins: { top: 0.05, bottom: 0.25 } });
     candle.setData(p.dates.map((t, i) => ({ time: t, open: p.open[i], high: p.high[i], low: p.low[i], close: p.close[i] })));
 
-    const ma20 = chart.addLineSeries({ color: v("--series-2"), lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    ma20.setData(movingAverage(p.close, p.dates, 20));
-    const ma60 = chart.addLineSeries({ color: v("--series-3"), lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    ma60.setData(movingAverage(p.close, p.dates, 60));
+    const values = {};  // 給圖例用
+    for (const m of opts.ma) {
+      const arr = Ind.sma(p.close, m);
+      values["MA" + m] = arr;
+      line(chart, MA_COLORS[m]).setData(series(p.dates, arr));
+    }
 
-    // 成交量：台股換算成「張」
+    // 扣抵（動態）：以游標所在的 K 棒為「今天」，在每條均線的扣抵 K 棒上標箭頭，並畫扣抵價位線
+    let priceLines = [], deductAt = -1;
+    function showDeduction(t) {
+      if (!opts.deduct || t === deductAt) return;
+      deductAt = t;
+      priceLines.forEach((l) => candle.removePriceLine(l));
+      priceLines = [];
+      const markers = [];
+      for (const m of opts.ma) {
+        const info = Ind.deduction(p.close, m, t);
+        if (!info) continue;
+        markers.push({ time: p.dates[info.index], position: "aboveBar", color: MA_COLORS[m], shape: "arrowDown", text: m + "扣 " + App.fmtPrice(info.value) });
+        priceLines.push(candle.createPriceLine({ price: info.value, color: MA_COLORS[m], lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: m + "扣" }));
+      }
+      markers.sort((a, b) => (a.time < b.time ? -1 : 1));
+      candle.setMarkers(markers);
+      // 均量扣抵：標在成交量柱上
+      const vmarkers = [];
+      for (const m of VOL_MA) {
+        const info = Ind.deduction(volArr, m, t);
+        if (info) vmarkers.push({ time: p.dates[info.index], position: "aboveBar", color: VOL_COLORS[m], shape: "arrowDown", text: "量" + m + "扣" });
+      }
+      vmarkers.sort((a, b) => (a.time < b.time ? -1 : 1));
+      vol.setMarkers(vmarkers);
+    }
+
+    // 成交量（台股換算成「張」）＋ 5 日、20 日均量
     const lot = d.market === "TW" ? 1000 : 1;
+    const volArr = p.volume.map((x) => x / lot);
     const vol = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, priceLineVisible: false, lastValueVisible: false });
     chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
-    vol.setData(p.dates.map((t, i) => ({
-      time: t,
-      value: Math.round(p.volume[i] / lot),
-      color: rgba(p.close[i] >= p.open[i] ? up : down, 0.45),
-    })));
+    vol.setData(p.dates.map((t, i) => ({ time: t, value: Math.round(volArr[i]), color: rgba(p.close[i] >= p.open[i] ? up : down, 0.45) })));
+    VOL_MA.forEach((m) => {
+      values["VMA" + m] = Ind.sma(volArr, m);
+      line(chart, VOL_COLORS[m], { priceScaleId: "vol" }).setData(series(p.dates, values["VMA" + m], 0));
+    });
+    values.vol = volArr;
 
-    const n = p.dates.length;
-    chart.timeScale().setVisibleLogicalRange({ from: n - 130, to: n + 2 });  // 預設看近半年，可拖曳、縮放
-    klines.push(chart);
-    return chart;
+    // 副圖：KD 或 MACD，時間軸與主圖同步
+    let sub = null;
+    subHost.hidden = opts.sub === "none";
+    if (opts.sub === "dmi") {
+      sub = LightweightCharts.createChart(subHost, chartOptions());
+      const r = Ind.dmi(p.high, p.low, p.close, DMI_N, DMI_N);
+      line(sub, up, { lineWidth: 2 }).setData(series(p.dates, r.plus));
+      line(sub, down, { lineWidth: 2 }).setData(series(p.dates, r.minus));
+      const adx = line(sub, "#1c7ed6", { lineWidth: 2 });
+      adx.setData(series(p.dates, r.adx));
+      adx.createPriceLine({ price: 25, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+      values.PDI = r.plus; values.MDI = r.minus; values.ADX = r.adx;
+    } else if (opts.sub === "kd") {
+      sub = LightweightCharts.createChart(subHost, chartOptions());
+      const r = Ind.kd(p.high, p.low, p.close, 9, 3, 3);
+      const k = line(sub, SUB_COLORS[0], { lineWidth: 2 });
+      k.setData(series(p.dates, r.K));
+      line(sub, SUB_COLORS[1], { lineWidth: 2 }).setData(series(p.dates, r.D));
+      k.createPriceLine({ price: 80, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+      k.createPriceLine({ price: 20, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+      values.K = r.K; values.D = r.D;
+    } else if (opts.sub === "macd") {
+      sub = LightweightCharts.createChart(subHost, chartOptions());
+      const r = Ind.macd(p.close, 12, 26, 9);
+      sub.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
+        .setData(p.dates.map((t, i) => (r.osc[i] == null ? { time: t } : { time: t, value: +r.osc[i].toFixed(3), color: rgba(r.osc[i] >= 0 ? up : down, 0.6) })));
+      line(sub, SUB_COLORS[0], { lineWidth: 2 }).setData(series(p.dates, r.dif, 3));
+      line(sub, SUB_COLORS[1], { lineWidth: 2 }).setData(series(p.dates, r.sig, 3));
+      values.DIF = r.dif; values.MACD = r.sig; values.OSC = r.osc;
+    }
+    if (sub) {
+      klines.push(sub);
+      // 兩張圖的可視範圍互相同步（拖曳、縮放任一張都會帶動另一張）
+      let syncing = false;
+      const link = (a, b) => a.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (syncing || !range) return;
+        syncing = true;
+        b.timeScale().setVisibleLogicalRange(range);
+        syncing = false;
+      });
+      link(chart, sub);
+      link(sub, chart);
+    }
+
+    chart.timeScale().setVisibleLogicalRange({ from: n - 130, to: n + 2 });  // 預設看近半年
+    if (sub) sub.timeScale().setVisibleLogicalRange({ from: n - 130, to: n + 2 });
+
+    // 游標移動時回報是第幾根 K 棒，沒有游標時回報最後一根
+    const listeners = [];
+    const report = (param) => {
+      const i = param && param.logical != null && param.logical >= 0 && param.logical < n ? Math.round(param.logical) : n - 1;
+      showDeduction(i);
+      listeners.forEach((fn) => fn(i));
+    };
+    chart.subscribeCrosshairMove(report);
+    if (sub) sub.subscribeCrosshairMove(report);
+    showDeduction(n - 1);
+
+    return { values, volArr, onCrosshair: (fn) => { listeners.push(fn); fn(n - 1); } };
   }
 
   // ---------- Chart.js 共用設定 ----------
@@ -177,5 +279,5 @@
     });
   }
 
-  window.Charts = { kline, revenue, quarterly, eps, destroyAll, quarterLabel };
+  window.Charts = { kline, revenue, quarterly, eps, destroyAll, quarterLabel, MAS, MA_COLORS, VOL_MA, VOL_COLORS, SUB_COLORS, DMI_N };
 })();

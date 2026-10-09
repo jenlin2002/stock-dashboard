@@ -18,13 +18,24 @@
     <h2 id="name">載入中…</h2>
     <span class="tag" id="tag"></span>
     <a class="btn" id="report" target="_blank" rel="noopener" hidden>年報</a>
+    <a class="btn" id="tvlink" target="_blank" rel="noopener">在 TradingView 開啟</a>
   </div>
   <div class="quote" id="quote"></div>
 
   <section class="panel">
-    <h3>K 線</h3>
+    <h3>K 線（日）</h3>
+    <div class="kctl" id="kctl" hidden></div>
+    <div class="klegend" id="klegend"></div>
     <div class="body chart-body" id="w-chart"></div>
-    <p class="note" id="kline-note" hidden>上市股票 TradingView 不開放嵌入，這裡用 FinMind 每日收盤資料自己畫（紅漲綠跌；橘線 20 日均線、紫線 60 日均線；可拖曳、滾輪縮放）。</p>
+    <div class="body sub-body" id="w-sub" hidden></div>
+    <div class="table-wrap" id="t-deduct"></div>
+    <p class="note" id="kline-note" hidden>
+      每日收盤資料（台股 FinMind、美股 Yahoo Finance），紅漲綠跌，可拖曳、滾輪縮放；盤中走勢請按上方「在 TradingView 開啟」。<br>
+      <b>扣抵（動態）</b>：游標指到哪一天，就以那天為基準標出扣抵 K 棒（箭頭）與扣抵價（虛線），下表也跟著換；沒有指著時以最新一天為準。
+      N 日均線下一日會扣掉 N 天前那根 K 棒的收盤價（扣抵值）：下一日收盤高於扣抵值，均線上揚；低於則下彎。均量同理（看成交量）。
+      「接下來 5 日」：扣抵值多數低於現值為<b>扣低</b>（容易續揚），多數高於現值為<b>扣高</b>（容易轉弱）。
+      DMI：紅線 +DI、綠線 −DI、藍線 ADX（點線為 25，高於 25 表示趨勢明確）。
+    </p>
   </section>
 
   <section class="panel" id="p-revenue" hidden>
@@ -70,6 +81,7 @@
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/widgets.js"></script>
+<script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
 <script>
 (async function () {
@@ -94,17 +106,18 @@
   document.getElementById("name").textContent = item.name;
   document.getElementById("tag").textContent = TV.tvSymbol(item);
   document.title = item.name + "｜台美股看盤";
+  document.getElementById("tvlink").href = TV.chartUrl(item);
 
   TV.fundamentals(document.getElementById("w-fund"), item);
   TV.profile(document.getElementById("w-profile"), item);
-  if (TV.hasPrice(item)) TV.advancedChart(document.getElementById("w-chart"), item);
 
   let d = null;
   try {
     d = await App.loadStockData(item);
   } catch (e) {
+    // 還沒有自己的資料（剛加進清單、排程還沒跑）：K 線暫用 TradingView（上市股票會顯示「不開放」提示）
     document.getElementById("quote").innerHTML = '<span class="updated">這檔股票還沒有自己的資料（每日排程更新後才會出現）。</span>';
-    if (!TV.hasPrice(item)) TV.advancedChart(document.getElementById("w-chart"), item);  // 顯示「不開放」提示
+    TV.advancedChart(document.getElementById("w-chart"), item);
     return;
   }
 
@@ -118,11 +131,96 @@
   }
   document.getElementById("p-revenue").hidden = !(d.monthly_revenue && d.monthly_revenue.length);
   document.getElementById("p-quarterly").hidden = !(d.quarterly && d.quarterly.length);
-  document.getElementById("kline-note").hidden = TV.hasPrice(item);
+  document.getElementById("kline-note").hidden = false;
+
+  // ---------- K 線設定（記在瀏覽器，讀不到就用預設） ----------
+  const MAS = Charts.MAS, SUBS = ["dmi", "kd", "macd", "none"];
+  let opts = { ma: MAS.slice(), deduct: true, sub: "dmi" };
+  try { opts = Object.assign(opts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
+  opts.ma = MAS.filter((m) => (opts.ma || []).includes(m));
+  if (!SUBS.includes(opts.sub)) opts.sub = "dmi";
+  function saveOpts() { try { localStorage.setItem("kline-opts-v2", JSON.stringify(opts)); } catch (e) {} }
+
+  const kctl = document.getElementById("kctl");
+  kctl.innerHTML =
+    MAS.map((m) => '<label><input type="checkbox" data-ma="' + m + '"' + (opts.ma.includes(m) ? " checked" : "") + '><i style="background:' + Charts.MA_COLORS[m] + '"></i>MA' + m + "</label>").join("") +
+    '<label><input type="checkbox" data-deduct' + (opts.deduct ? " checked" : "") + ">扣抵</label>" +
+    '<span class="seg" role="group" aria-label="副圖">' +
+      ["dmi:DMI", "kd:KD", "macd:MACD", "none:不顯示"].map((s) => { const [k, t] = s.split(":"); return '<button type="button" data-sub="' + k + '" aria-pressed="' + (opts.sub === k) + '">' + t + "</button>"; }).join("") +
+    "</span>";
+  kctl.hidden = false;
+  kctl.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.dataset.ma) opts.ma = MAS.filter((m) => kctl.querySelector('[data-ma="' + m + '"]').checked);
+    if ("deduct" in t.dataset) opts.deduct = t.checked;
+    saveOpts();
+    drawCharts();
+  });
+  kctl.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-sub]");
+    if (!b) return;
+    opts.sub = b.dataset.sub;
+    kctl.querySelectorAll("button[data-sub]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    saveOpts();
+    drawCharts();
+  });
+
+  function drawKline() {
+    if (!d.price.dates.length) return;
+    deductShown = -1;
+    const k = Charts.kline(document.getElementById("w-chart"), document.getElementById("w-sub"), d, opts);
+    const p = d.price, lg = document.getElementById("klegend");
+    const vfmt = (x, dg) => (App.isNum(x) ? App.fmtNum(x, dg == null ? 2 : dg) : "—");
+    k.onCrosshair((i) => {
+      const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
+      let html = "<span>" + p.dates[i] + "</span>" +
+        "<span>開 " + App.fmtPrice(p.open[i]) + " 高 " + App.fmtPrice(p.high[i]) + " 低 " + App.fmtPrice(p.low[i]) +
+        ' 收 <b class="' + App.upDown(chg) + '">' + App.fmtPrice(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
+      html += opts.ma.map((m) => '<span style="color:' + Charts.MA_COLORS[m] + '">MA' + m + " " + vfmt(k.values["MA" + m][i]) + "</span>").join("");
+      const unit = d.market === "TW" ? " 張" : "";
+      html += "<span>量 " + vfmt(k.values.vol[i], 0) + unit + "</span>";
+      html += Charts.VOL_MA.map((m) => '<span style="color:' + Charts.VOL_COLORS[m] + '">均量' + m + " " + vfmt(k.values["VMA" + m][i], 0) + "</span>").join("");
+      const C = Charts.SUB_COLORS;
+      if (opts.sub === "dmi") html += '<span class="up">+DI' + Charts.DMI_N + " " + vfmt(k.values.PDI[i]) + '</span><span class="down">−DI ' + vfmt(k.values.MDI[i]) + '</span><span style="color:#1c7ed6">ADX ' + vfmt(k.values.ADX[i]) + "</span>";
+      if (opts.sub === "kd") html += '<span style="color:' + C[0] + '">K ' + vfmt(k.values.K[i]) + '</span><span style="color:' + C[1] + '">D ' + vfmt(k.values.D[i]) + "</span>";
+      if (opts.sub === "macd") html += '<span style="color:' + C[0] + '">DIF ' + vfmt(k.values.DIF[i], 3) + '</span><span style="color:' + C[1] + '">MACD ' + vfmt(k.values.MACD[i], 3) + '</span><span class="' + App.upDown(k.values.OSC[i]) + '">OSC ' + vfmt(k.values.OSC[i], 3) + "</span>";
+      lg.innerHTML = html;
+      renderDeductTable(i, k.volArr);  // 扣抵表也跟著游標所在的那天
+    });
+  }
+
+  // 扣抵表：勾選的均線＋均量，以第 t 根 K 棒為「今天」
+  let deductShown = -1;
+  function renderDeductTable(t, volArr) {
+    const el = document.getElementById("t-deduct");
+    if (!opts.deduct) { el.innerHTML = ""; deductShown = -1; return; }
+    if (t === deductShown) return;
+    deductShown = t;
+    const close = d.price.close, last = close[t], lastVol = volArr[t];
+    const trendCell = (r, fmt) => '<td><b class="' + (r.trend === "扣低" ? "up" : r.trend === "扣高" ? "down" : "") + '">' + r.trend + '</b> <span class="updated">' + r.next5.map(fmt).join("、") + "</span></td>";
+    const priceRows = opts.ma.map((m) => Ind.deduction(close, m, t)).filter(Boolean).map((r) =>
+      '<tr><td><i class="dot" style="background:' + Charts.MA_COLORS[r.n] + '"></i>MA' + r.n + "</td>" +
+      "<td>" + App.fmtPrice(r.ma) + (last > r.ma ? '<span class="up"> 價在線上</span>' : '<span class="down"> 價在線下</span>') + "</td>" +
+      "<td>" + App.fmtPrice(r.value) + "</td>" +
+      '<td class="' + App.upDown(r.dir) + '">' + (r.dir > 0 ? "上揚 ↗" : r.dir < 0 ? "下彎 ↘" : "持平") + "</td>" +
+      "<td>收盤" + (r.dir >= 0 ? "跌破 " : "站上 ") + App.fmtPrice(r.value) + "（" + App.fmtPct(r.gapPct, true) + "）</td>" +
+      trendCell(r, App.fmtPrice) + "</tr>");
+    const vf = (x) => App.fmtNum(x, 0);
+    const volRows = Charts.VOL_MA.map((m) => Ind.deduction(volArr, m, t)).filter(Boolean).map((r) =>
+      '<tr><td><i class="dot" style="background:' + Charts.VOL_COLORS[r.n] + '"></i>均量' + r.n + "</td>" +
+      "<td>" + vf(r.ma) + (lastVol > r.ma ? '<span class="up"> 量大於均量</span>' : '<span class="down"> 量小於均量</span>') + "</td>" +
+      "<td>" + vf(r.value) + "</td>" +
+      '<td class="' + App.upDown(r.dir) + '">' + (r.dir > 0 ? "均量增 ↗" : r.dir < 0 ? "均量減 ↘" : "持平") + "</td>" +
+      "<td>量" + (r.dir >= 0 ? "低於 " : "高於 ") + vf(r.value) + "</td>" +
+      trendCell(r, vf) + "</tr>");
+    if (!priceRows.length && !volRows.length) { el.innerHTML = ""; return; }
+    el.innerHTML = '<table><thead><tr><th>以 ' + d.price.dates[t] + ' 為基準</th><th>目前值</th><th>下一日扣抵值</th><th>下一日方向（收盤／量不變）</th><th>轉向門檻</th><th>接下來 5 日扣抵</th></tr></thead><tbody>' +
+      priceRows.join("") + volRows.join("") + "</tbody></table>";
+  }
 
   function drawCharts() {
     Charts.destroyAll();
-    if (!TV.hasPrice(item) && d.price.dates.length) Charts.kline(document.getElementById("w-chart"), d);
+    drawKline();
     if (d.monthly_revenue && d.monthly_revenue.length) Charts.revenue(document.getElementById("c-revenue"), d);
     if (d.quarterly && d.quarterly.length) {
       Charts.quarterly(document.getElementById("c-quarterly"), d);

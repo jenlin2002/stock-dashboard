@@ -58,9 +58,15 @@
   function register(fn) { renderers.push(fn); fn(); }
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => renderers.forEach((fn) => fn()));
 
+  // TradingView 完整圖表頁（用本人的登入、付費功能和自訂指標）
+  function chartUrl(item) {
+    return "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(tvSymbol(item));
+  }
+
   window.TV = {
     tvSymbol,
     hasPrice,
+    chartUrl,
     tickerTape(host, items) {
       register(() => mount(host, "ticker-tape", {
         symbols: items.filter(hasPrice).map((it) => ({ proName: tvSymbol(it), title: it.name })),

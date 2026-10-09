@@ -36,7 +36,7 @@
     document.querySelector("main").innerHTML = '<p class="msg">讀不到追蹤清單（config/watchlist.json）。</p>';
     return;
   }
-  TV.tickerTape(document.getElementById("tape"), [...w.tw, ...w.us]);
+  ownTape(document.getElementById("tape"));
 
   function addCards(list, el) {
     if (!list.length) { el.innerHTML = '<p class="msg">清單是空的。</p>'; return; }
@@ -49,12 +49,21 @@
       a.querySelector("strong").textContent = item.name;
       a.querySelector("span").textContent = sym;
       el.appendChild(a);
-      if (TV.hasPrice(item)) TV.miniOverview(a.querySelector(".mini"), item);
-      else ownMini(a.querySelector(".mini"), item);
+      ownMini(a.querySelector(".mini"), item);
     }
   }
 
-  // 上市股票：TradingView 不給報價，改用自己的日 K 資料畫近一年走勢（紅漲綠跌）
+  // 頁首報價列：讀 summary.json（紅漲綠跌）；讀不到就退回 TradingView 跑馬燈
+  async function ownTape(host) {
+    let s;
+    try { s = await App.loadJSON("data/summary.json"); } catch (e) { return TV.tickerTape(host, [...w.tw, ...w.us]); }
+    host.innerHTML = '<div class="own-tape">' + s.stocks.map((x) =>
+      '<a href="stock.html?symbol=' + encodeURIComponent(x.symbol) + '"><b>' + App.esc(x.name) + "</b> " +
+      (x.market === "US" ? "$" : "") + App.fmtPrice(x.price) +
+      ' <span class="' + App.upDown(x.change_pct) + '">' + App.fmtPct(x.change_pct, true) + "</span></a>").join("") + "</div>";
+  }
+
+  // 卡片：用自己的日 K 資料畫近一年走勢（紅漲綠跌）；沒有資料檔時退回 TradingView
   async function ownMini(host, item) {
     let d;
     try { d = await App.loadStockData(item); } catch (e) { return TV.miniOverview(host, item); }
@@ -66,7 +75,7 @@
     const pts = c.map((x, i) => (i / (n - 1) * W).toFixed(1) + "," + (H - (x - min) / (max - min || 1) * H).toFixed(1)).join(" ");
     host.innerHTML =
       '<div class="own-mini">' +
-        '<div><span class="px ' + App.upDown(diff) + '">' + App.fmtPrice(c[n - 1]) + '</span>' +
+        '<div><span class="px ' + App.upDown(diff) + '">' + (d.market === "US" ? "$" : "") + App.fmtPrice(c[n - 1]) + '</span>' +
         '<span class="chg ' + App.upDown(diff) + '">' + App.fmtPct(pct, true) + '</span></div>' +
         '<div class="sub">收盤 ' + App.esc(dates[n - 1]) + "・近一年 " + App.fmtPct((c[n - 1] / c[0] - 1) * 100, true) + "</div>" +
         '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
