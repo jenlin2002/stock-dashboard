@@ -15,7 +15,7 @@
    - 網址：https://stock-dashboard-2fv.pages.dev （push 到 main 會自動部署）
    - Zero Trust 選 Free 方案；Access 應用程式「stock-dashboard - Cloudflare Pages」保護兩個網址：`stock-dashboard-2fv.pages.dev`（正式）和 `*.stock-dashboard-2fv.pages.dev`（每次部署的預覽網址）
    - 政策：Allow／Include Emails = 本人 email；登入方式 One-time PIN。已驗證未登入時會被導到 Cloudflare Access 登入頁。
-4. [ ] **本人**（可延後）：到 finmindtrade.com 註冊取得 token，存入 GitHub repo → Settings → Secrets and variables → Actions → `FINMIND_TOKEN`。不設 token 也能跑（每小時約 300 次請求，每檔台股用 5 次），追蹤清單變多再設。
+4. [x] **本人**：FinMind token 已存入 GitHub Secret `FINMIND_TOKEN`（2026-10-09）。`fetch_tw.py` 有這個環境變數就自動帶 token；本機手動執行可不設（每小時約 300 次請求，每檔台股用 5 次）。Phase 4 的 workflow 要把 Secret 傳成環境變數。
 5. [x] **Claude Code**：實作 Phase 2（2026-10-09 完成，見 Phase 2「實作結果」）
 6. [ ] **本人**：確認 Phase 2 資料，用 GitHub Desktop commit + push
 7. [ ] **Claude Code**：Phase 3（美股資料），之後依序 Phase 4～6
