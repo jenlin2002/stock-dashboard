@@ -1,0 +1,43 @@
+//@version=6
+// 成交量＋均量 5/13/34 扣抵（與 stock-dashboard 網站同一套邏輯）
+// - 量柱紅漲綠跌（收盤 ≥ 開盤為紅）
+// - 扣抵（動態）：每根新 K 棒都重新標出各均量的扣抵量柱，箭頭表示「量不變時」下一根均量增或減
+indicator("成交量 均量5/13/34 扣抵", shorttitle = "量扣抵", format = format.volume, max_labels_count = 10)
+
+len1 = input.int(5, "均量1", minval = 2)
+len2 = input.int(13, "均量2", minval = 2)
+len3 = input.int(34, "均量3", minval = 2)
+col1 = input.color(#f59f00, "均量1 顏色")
+col2 = input.color(#22b8cf, "均量2 顏色")
+col3 = input.color(#ae3ec9, "均量3 顏色")
+showDeduct = input.bool(true, "顯示扣抵標記")
+upCol = input.color(#d9363e, "上漲（紅）")
+dnCol = input.color(#1e9e57, "下跌（綠）")
+
+plot(volume, "成交量", close >= open ? color.new(upCol, 45) : color.new(dnCol, 45), style = plot.style_columns)
+plot(ta.sma(volume, len1), "均量1", col1, 1)
+plot(ta.sma(volume, len2), "均量2", col2, 1)
+plot(ta.sma(volume, len3), "均量3", col3, 1)
+
+d1 = volume[len1 - 1]
+d2 = volume[len2 - 1]
+d3 = volume[len3 - 1]
+
+newLabel(color c) =>
+    label.new(bar_index, 0, "", style = label.style_label_down, color = c, textcolor = color.white, size = size.small)
+
+var label lb1 = newLabel(col1)
+var label lb2 = newLabel(col2)
+var label lb3 = newLabel(col3)
+
+setDeduct(label lb, int len, float d) =>
+    if showDeduct and not na(d) and not na(volume)
+        label.set_xy(lb, bar_index - (len - 1), d)
+        label.set_text(lb, "量" + str.tostring(len) + "扣 " + str.tostring(d, format.volume) + (volume > d ? " ↗" : volume < d ? " ↘" : ""))
+    else
+        label.set_xy(lb, bar_index, na)
+
+if barstate.islast
+    setDeduct(lb1, len1, d1)
+    setDeduct(lb2, len2, d2)
+    setDeduct(lb3, len3, d3)

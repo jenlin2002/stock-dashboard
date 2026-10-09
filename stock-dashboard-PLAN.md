@@ -24,7 +24,10 @@
 10. [x] **本人**：手動觸發 workflow #1 成功（2026-10-09，42 秒，綠燈＝兩個 Secret 都有效）。之後把 actions 升到 checkout@v5、setup-python@v6（v4／v5 用的 Node.js 20 已淘汰）。
 11. [x] **Claude Code**：Phase 5（數據頁）（2026-10-09 完成，見 Phase 5「實作結果」；顏色本人選定**紅漲綠跌**）
 12. [ ] **本人**：Fetch／Pull 後 commit + push，到網站確認個股頁、比較頁
-13. [ ] **Claude Code**：Phase 6（收尾：README）
+13. [x] **Claude Code**：Phase 6（收尾）（2026-10-09 完成）：`README.md`（新增股票、手動更新、Secrets、網站內容、資料來源）；workflow 加上「push 改到 `config/watchlist.json` 就立刻抓台股＋美股」。免責聲明與資料來源已在各頁頁尾。
+14. [x] **本人**：Fetch／Pull 後 commit + push（PHASE5V2）
+15. [x] **Claude Code**：Phase 7（查詢任何股票）（2026-10-09，見下方「Phase 7」）
+16. [ ] **本人**：在 Cloudflare 設定環境變數 `FINMIND_TOKEN`、`SEC_USER_AGENT`，然後 commit + push，到網站用搜尋框測試
 
 **給 Claude Code 的規則**
 - 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
@@ -296,6 +299,29 @@ stock-dashboard/
   - 副圖：**DMI（13，Wilder；ADX 25 參考線）**為預設，另可切 KD（9,3,3）、MACD（12,26,9）或不顯示；與主圖同步捲動、縮放。
   - 設定記在瀏覽器 localStorage（`kline-opts-v2`）。
 - 待確認：本人 TradingView 上「DMI 13 75 25 5」後面參數的意義；目前 DI 與 ADX 都用 13。
+
+**TradingView 版（2026-10-09，本人要求）**：同一套指標的 Pine Script v6，放在 `tradingview/`：
+- `1_deduct_ma.pine`：主圖 MA 8/21/55/89＋扣抵標記、扣抵價虛線、扣抵表。
+- `2_deduct_volume.pine`：成交量（紅漲綠跌）＋均量 5/13/34＋扣抵標記。
+- `3_dmi.pine`：DMI 13（+DI 紅、−DI 綠、ADX 藍、25 參考線）。
+- 差異：Pine 無法跟著游標移動，「動態」是指每根新 K 棒（含即時盤）都重新計算；任何週期（5 分、日、週）都能用。
+- 安裝：TradingView → Pine 編輯器 → 新建指標 → 貼上 → 儲存 → 加到圖表（三支各做一次）。修改時改 repo 裡的檔案再貼回去。
+
+---
+
+## Phase 7：查詢任何一檔股票（2026-10-09，本人追加）
+
+本人需求：不只追蹤清單，**輸入任何代號或名稱都能看完整資料**。
+
+- `scripts/build_stocklist.py` → `data/stocklist.json`：台股上市＋上櫃（FinMind `TaiwanStockInfo`，約 2,800 檔，含產業別）、美股 Nasdaq／NYSE／CBOE（SEC `company_tickers_exchange.json`，約 7,700 檔，含 CIK）。約 500KB，排程台股那次一起更新。
+- `assets/search.js`：每頁頁首搜尋框，代號或名稱都可搜（代號完全相符 > 代號開頭 > 名稱開頭 > 名稱包含），上下鍵選擇、Enter 進入。
+- `functions/api/stock.js`（Cloudflare Pages Function，`/api/stock`）：即時抓不在清單的股票，輸出與 `data/*.json` 相同格式（`live: true`）。邏輯移植自 `fetch_tw.py`、`fetch_us.py`，已核對 2330、AAPL、NVDA 與排程檔案逐欄相同。
+  - 台股：FinMind 5 個資料集平行抓取。
+  - 美股：SEC **companyfacts**（不用 companyconcept：KO 等公司會回傳空資料）。companyfacts 3～5MB，整個解析要 20ms 以上，超過 Cloudflare 免費方案每次約 10ms CPU，所以用 `extractTags()` 單次掃描文字、只解析需要的欄位（約 4ms，與完整解析結果相同）。股價、股利用 Yahoo chart API（從 5 年前的 1/1 抓起，股利年度才完整）。本益比＝股價 ÷ 近四季 EPS；沒有股價淨值比。
+  - 快取 6 小時（瀏覽器 Cache-Control；pages.dev 上的 Cache API 可能無效）。財報抓不到時回傳 `notice`，只快取 10 分鐘。
+- `stock.html`：先查 watchlist → 再查 stocklist → 都沒有就依格式猜（純數字＝上市）。不在清單就呼叫 `/api/stock`，顯示「即時查詢」與可複製的 watchlist 設定行。
+- **Cloudflare 環境變數**（Pages → Settings → Variables and Secrets → Production）：`FINMIND_TOKEN`、`SEC_USER_AGENT`。沒設 SEC_USER_AGENT 時美股財報會失敗（股價仍有）。
+- 本機測試：`npx wrangler pages dev . --port 8542`，`.dev.vars` 放測試用環境變數（gitignore）。
 
 ---
 

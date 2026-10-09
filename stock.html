@@ -21,6 +21,7 @@
     <a class="btn" id="tvlink" target="_blank" rel="noopener">在 TradingView 開啟</a>
   </div>
   <div class="quote" id="quote"></div>
+  <div class="live-note" id="live-note" hidden></div>
 
   <section class="panel">
     <h3>K 線（日）</h3>
@@ -80,26 +81,33 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="assets/app.js"></script>
+<script src="assets/search.js"></script>
 <script src="assets/widgets.js"></script>
 <script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
 <script>
 (async function () {
-  const symbol = new URLSearchParams(location.search).get("symbol");
+  const params = new URLSearchParams(location.search);
+  const symbol = (params.get("symbol") || "").trim();
+  const m = params.get("m");  // 搜尋框帶來的市場（tw / us），代號同時是台股與美股時用
   const main = document.getElementById("main");
-  let item = null;
+  let item = null, inWatchlist = false;
   try {
     item = App.findStock(await App.loadWatchlist(), symbol);
-  } catch (e) { /* 讀不到清單時，下面依代號格式自行判斷 */ }
+    inWatchlist = !!item && (!m || App.marketOf(item) === m);
+    if (!inWatchlist) item = null;
+  } catch (e) { /* 讀不到清單時，下面再找 */ }
 
+  // 不在追蹤清單：到全部股票的清單（data/stocklist.json）找
+  if (!item && symbol) item = await App.lookupStock(symbol, m);
   if (!item && symbol) {
-    // 不在追蹤清單：純數字當上市台股，其餘當 NASDAQ 美股
-    item = /^\d{4,6}$/.test(symbol)
-      ? { code: symbol, name: symbol, market: "TWSE" }
+    // 清單裡也沒有：純數字當上市台股，其餘當 NASDAQ 美股
+    item = /^\d{4,6}[A-Z]?$/i.test(symbol)
+      ? { code: symbol.toUpperCase(), name: symbol.toUpperCase(), market: "TWSE" }
       : { ticker: symbol.toUpperCase(), name: symbol.toUpperCase(), exchange: "NASDAQ" };
   }
   if (!item) {
-    main.innerHTML = '<p class="msg">沒有指定股票代號。請從<a href="index.html">追蹤清單</a>進入。</p>';
+    main.innerHTML = '<p class="msg">沒有指定股票代號。請用上方搜尋框查詢，或從<a href="index.html">追蹤清單</a>進入。</p>';
     return;
   }
 
@@ -111,15 +119,24 @@
   TV.fundamentals(document.getElementById("w-fund"), item);
   TV.profile(document.getElementById("w-profile"), item);
 
+  // 追蹤清單的股票讀排程抓好的檔案；其他股票（或檔案還沒產生）即時查詢
   let d = null;
+  const quoteEl = document.getElementById("quote");
   try {
+    if (!inWatchlist) throw new Error("not in watchlist");
     d = await App.loadStockData(item);
   } catch (e) {
-    // 還沒有自己的資料（剛加進清單、排程還沒跑）：K 線暫用 TradingView（上市股票會顯示「不開放」提示）
-    document.getElementById("quote").innerHTML = '<span class="updated">這檔股票還沒有自己的資料（每日排程更新後才會出現）。</span>';
-    TV.advancedChart(document.getElementById("w-chart"), item);
-    return;
+    quoteEl.innerHTML = '<span class="updated">即時查詢中…（約 1～3 秒）</span>';
+    try {
+      d = await App.loadLiveData(item);
+    } catch (err) {
+      quoteEl.innerHTML = '<span class="updated">查不到資料：' + App.esc(err.message) + "</span>";
+      TV.advancedChart(document.getElementById("w-chart"), item);  // 退回 TradingView（上市股票會顯示「不開放」提示）
+      return;
+    }
   }
+  if (d.live) renderLiveNote();
+  if (item.name === App.symbolOf(item) && d.name) document.getElementById("name").textContent = d.name;
 
   renderQuote(d);
   renderDividends(d);
@@ -137,13 +154,13 @@
   const MAS = Charts.MAS, SUBS = ["dmi", "kd", "macd", "none"];
   let opts = { ma: MAS.slice(), deduct: true, sub: "dmi" };
   try { opts = Object.assign(opts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
-  opts.ma = MAS.filter((m) => (opts.ma || []).includes(m));
+  opts.ma = MAS.filter((x) => (opts.ma || []).includes(x));
   if (!SUBS.includes(opts.sub)) opts.sub = "dmi";
   function saveOpts() { try { localStorage.setItem("kline-opts-v2", JSON.stringify(opts)); } catch (e) {} }
 
   const kctl = document.getElementById("kctl");
   kctl.innerHTML =
-    MAS.map((m) => '<label><input type="checkbox" data-ma="' + m + '"' + (opts.ma.includes(m) ? " checked" : "") + '><i style="background:' + Charts.MA_COLORS[m] + '"></i>MA' + m + "</label>").join("") +
+    MAS.map((x) => '<label><input type="checkbox" data-ma="' + x + '"' + (opts.ma.includes(x) ? " checked" : "") + '><i style="background:' + Charts.MA_COLORS[x] + '"></i>MA' + x + "</label>").join("") +
     '<label><input type="checkbox" data-deduct' + (opts.deduct ? " checked" : "") + ">扣抵</label>" +
     '<span class="seg" role="group" aria-label="副圖">' +
       ["dmi:DMI", "kd:KD", "macd:MACD", "none:不顯示"].map((s) => { const [k, t] = s.split(":"); return '<button type="button" data-sub="' + k + '" aria-pressed="' + (opts.sub === k) + '">' + t + "</button>"; }).join("") +
@@ -151,7 +168,7 @@
   kctl.hidden = false;
   kctl.addEventListener("change", (e) => {
     const t = e.target;
-    if (t.dataset.ma) opts.ma = MAS.filter((m) => kctl.querySelector('[data-ma="' + m + '"]').checked);
+    if (t.dataset.ma) opts.ma = MAS.filter((x) => kctl.querySelector('[data-ma="' + x + '"]').checked);
     if ("deduct" in t.dataset) opts.deduct = t.checked;
     saveOpts();
     drawCharts();
@@ -176,10 +193,10 @@
       let html = "<span>" + p.dates[i] + "</span>" +
         "<span>開 " + App.fmtPrice(p.open[i]) + " 高 " + App.fmtPrice(p.high[i]) + " 低 " + App.fmtPrice(p.low[i]) +
         ' 收 <b class="' + App.upDown(chg) + '">' + App.fmtPrice(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
-      html += opts.ma.map((m) => '<span style="color:' + Charts.MA_COLORS[m] + '">MA' + m + " " + vfmt(k.values["MA" + m][i]) + "</span>").join("");
+      html += opts.ma.map((x) => '<span style="color:' + Charts.MA_COLORS[x] + '">MA' + x + " " + vfmt(k.values["MA" + x][i]) + "</span>").join("");
       const unit = d.market === "TW" ? " 張" : "";
       html += "<span>量 " + vfmt(k.values.vol[i], 0) + unit + "</span>";
-      html += Charts.VOL_MA.map((m) => '<span style="color:' + Charts.VOL_COLORS[m] + '">均量' + m + " " + vfmt(k.values["VMA" + m][i], 0) + "</span>").join("");
+      html += Charts.VOL_MA.map((x) => '<span style="color:' + Charts.VOL_COLORS[x] + '">均量' + x + " " + vfmt(k.values["VMA" + x][i], 0) + "</span>").join("");
       const C = Charts.SUB_COLORS;
       if (opts.sub === "dmi") html += '<span class="up">+DI' + Charts.DMI_N + " " + vfmt(k.values.PDI[i]) + '</span><span class="down">−DI ' + vfmt(k.values.MDI[i]) + '</span><span style="color:#1c7ed6">ADX ' + vfmt(k.values.ADX[i]) + "</span>";
       if (opts.sub === "kd") html += '<span style="color:' + C[0] + '">K ' + vfmt(k.values.K[i]) + '</span><span style="color:' + C[1] + '">D ' + vfmt(k.values.D[i]) + "</span>";
@@ -198,7 +215,7 @@
     deductShown = t;
     const close = d.price.close, last = close[t], lastVol = volArr[t];
     const trendCell = (r, fmt) => '<td><b class="' + (r.trend === "扣低" ? "up" : r.trend === "扣高" ? "down" : "") + '">' + r.trend + '</b> <span class="updated">' + r.next5.map(fmt).join("、") + "</span></td>";
-    const priceRows = opts.ma.map((m) => Ind.deduction(close, m, t)).filter(Boolean).map((r) =>
+    const priceRows = opts.ma.map((x) => Ind.deduction(close, x, t)).filter(Boolean).map((r) =>
       '<tr><td><i class="dot" style="background:' + Charts.MA_COLORS[r.n] + '"></i>MA' + r.n + "</td>" +
       "<td>" + App.fmtPrice(r.ma) + (last > r.ma ? '<span class="up"> 價在線上</span>' : '<span class="down"> 價在線下</span>') + "</td>" +
       "<td>" + App.fmtPrice(r.value) + "</td>" +
@@ -206,7 +223,7 @@
       "<td>收盤" + (r.dir >= 0 ? "跌破 " : "站上 ") + App.fmtPrice(r.value) + "（" + App.fmtPct(r.gapPct, true) + "）</td>" +
       trendCell(r, App.fmtPrice) + "</tr>");
     const vf = (x) => App.fmtNum(x, 0);
-    const volRows = Charts.VOL_MA.map((m) => Ind.deduction(volArr, m, t)).filter(Boolean).map((r) =>
+    const volRows = Charts.VOL_MA.map((x) => Ind.deduction(volArr, x, t)).filter(Boolean).map((r) =>
       '<tr><td><i class="dot" style="background:' + Charts.VOL_COLORS[r.n] + '"></i>均量' + r.n + "</td>" +
       "<td>" + vf(r.ma) + (lastVol > r.ma ? '<span class="up"> 量大於均量</span>' : '<span class="down"> 量小於均量</span>') + "</td>" +
       "<td>" + vf(r.value) + "</td>" +
@@ -229,6 +246,22 @@
   }
   drawCharts();
   App.onThemeChange(drawCharts);
+
+  // 即時查詢的股票：提示怎麼加進追蹤清單（網站不能直接改 GitHub 上的檔案）
+  function renderLiveNote() {
+    const entry = item.code
+      ? { code: item.code, name: item.name, market: item.market || "TWSE" }
+      : { ticker: item.ticker, name: item.name, exchange: item.exchange || "NASDAQ" };
+    const line = JSON.stringify(entry).replace(/,"/g, ', "').replace(/":/g, '": ');
+    const el = document.getElementById("live-note");
+    el.innerHTML = "即時查詢（不在追蹤清單，資料快取 6 小時）。要每天自動更新、出現在首頁和比較頁，把下面這行加到 <code>config/watchlist.json</code> 的「" +
+      (item.code ? "tw" : "us") + "」清單：<br><code class=\"entry\">" + App.esc(line) + '</code> <button type="button" class="btn" id="copy-entry">複製</button>' +
+      (d.notice ? "<br>⚠ " + App.esc(d.notice) : "");
+    el.hidden = false;
+    document.getElementById("copy-entry").addEventListener("click", (e) => {
+      navigator.clipboard.writeText(line).then(() => { e.target.textContent = "已複製"; }, () => {});
+    });
+  }
 
   function renderQuote(d) {
     const c = d.price.close, n = c.length;

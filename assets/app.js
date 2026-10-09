@@ -19,9 +19,43 @@
     return watchlist.tw.find((x) => x.code === s) || watchlist.us.find((x) => x.ticker.toUpperCase() === s) || null;
   }
 
-  // 個股資料檔：data/tw/2330.json、data/us/AAPL.json（Phase 2、3 產生）
+  // 個股資料檔：data/tw/2330.json、data/us/AAPL.json（排程產生，只有追蹤清單裡的股票）
   function loadStockData(item) {
     return loadJSON("data/" + marketOf(item) + "/" + symbolOf(item).toUpperCase() + ".json");
+  }
+
+  // 不在追蹤清單的股票：呼叫 Cloudflare Function 即時抓（functions/api/stock.js）
+  async function loadLiveData(item) {
+    const q = new URLSearchParams({ market: marketOf(item), symbol: symbolOf(item), name: item.name || "" });
+    if (item.code) q.set("exchange", item.market || "TWSE");
+    else { q.set("exchange", item.exchange || "NASDAQ"); if (item.cik) q.set("cik", item.cik); }
+    const res = await fetch("api/stock?" + q);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "即時查詢失敗（" + res.status + "）");
+    return body;
+  }
+
+  // 全部台股、美股的代號清單（搜尋框用，約 500KB，只載入一次）
+  let stockListPromise = null;
+  function loadStockList() {
+    if (!stockListPromise) stockListPromise = loadJSON("data/stocklist.json").catch((e) => { stockListPromise = null; throw e; });
+    return stockListPromise;
+  }
+
+  // 在清單裡找代號，回傳與 watchlist 相同格式的 item；m 可指定 "tw" / "us"
+  async function lookupStock(symbol, m) {
+    const s = String(symbol || "").toUpperCase();
+    let list;
+    try { list = await loadStockList(); } catch (e) { return null; }
+    if (m !== "us") {
+      const t = list.tw.find((x) => x[0] === s);
+      if (t) return { code: t[0], name: t[1], market: t[2], industry: t[3] };
+    }
+    if (m !== "tw") {
+      const u = list.us.find((x) => x[0] === s);
+      if (u) return { ticker: u[0], name: u[1], exchange: u[2], cik: u[3] };
+    }
+    return null;
   }
 
   function isNum(n) { return typeof n === "number" && isFinite(n); }
@@ -75,7 +109,7 @@
   }
 
   window.App = {
-    loadJSON, loadWatchlist, symbolOf, marketOf, findStock, loadStockData,
+    loadJSON, loadWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadStockList, lookupStock,
     isNum, fmtNum, fmtPrice, fmtRevenue, revenueUnit, fmtPct, upDown, cssVar, onThemeChange, esc,
   };
 })();

@@ -12,6 +12,10 @@ on:
         type: choice
         options: [all, tw, us]
         default: all
+  # 修改追蹤清單後立刻抓資料（新股票不用等到隔天）
+  push:
+    branches: [main]
+    paths: [config/watchlist.json]
 
 permissions:
   contents: write
@@ -40,7 +44,7 @@ jobs:
 
       - name: 抓台股
         id: tw
-        if: github.event.schedule == '0 8 * * 1-5' || (github.event_name == 'workflow_dispatch' && inputs.target != 'us')
+        if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target != 'us')
         continue-on-error: true
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
@@ -48,7 +52,7 @@ jobs:
 
       - name: 抓美股
         id: us
-        if: github.event.schedule == '0 22 * * 1-5' || (github.event_name == 'workflow_dispatch' && inputs.target != 'tw')
+        if: github.event.schedule == '0 22 * * 1-5' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.target != 'tw')
         continue-on-error: true
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
@@ -56,6 +60,15 @@ jobs:
 
       - name: 彙整 summary.json
         run: python scripts/build_summary.py
+
+      # 搜尋框用的全部股票清單：台股排程時更新（每天一次就夠）
+      - name: 更新股票清單 stocklist.json
+        if: github.event.schedule == '0 8 * * 1-5' || github.event_name != 'schedule'
+        continue-on-error: true
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: python scripts/build_stocklist.py
 
       - name: 有變更才 commit 並 push
         run: |

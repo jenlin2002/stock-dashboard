@@ -1,0 +1,16 @@
+//@version=6
+// DMI（Wilder）紅漲綠跌：+DI 紅、−DI 綠、ADX 藍，ADX 25 參考線（與 stock-dashboard 網站相同）
+indicator("DMI 紅漲綠跌", shorttitle = "DMI")
+
+diLen = input.int(13, "DI 週期", minval = 1)
+adxLen = input.int(13, "ADX 平滑", minval = 1)
+adxRef = input.float(25, "ADX 參考線")
+upCol = input.color(#d9363e, "+DI（紅）")
+dnCol = input.color(#1e9e57, "−DI（綠）")
+adxCol = input.color(#1c7ed6, "ADX（藍）")
+
+[diPlus, diMinus, adx] = ta.dmi(diLen, adxLen)
+plot(diPlus, "+DI", upCol, 2)
+plot(diMinus, "−DI", dnCol, 2)
+plot(adx, "ADX", adxCol, 2)
+hline(adxRef, "ADX 參考線", color.gray, hline.style_dotted)

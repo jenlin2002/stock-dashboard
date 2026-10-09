@@ -1,0 +1,128 @@
+//@version=6
+// 扣抵均線 MA 8/21/55/89（與 stock-dashboard 網站同一套邏輯）
+// - 簡單均線（SMA）：扣抵的概念只適用於簡單均線
+// - 扣抵（動態）：每根新 K 棒（含即時盤）都重新標出各均線的扣抵 K 棒與扣抵價
+//   N 日均線下一根會扣掉 N−1 根之前那根的收盤價（扣抵值）：下一根收盤高於扣抵值，均線上揚；低於則下彎
+// - 扣抵表：目前均線、扣抵值、方向（收盤不變時）、轉向門檻、接下來 5 根扣低／扣高
+// - 紅漲綠跌
+indicator("扣抵均線 MA 8/21/55/89", shorttitle = "扣抵MA", overlay = true, max_labels_count = 20, max_lines_count = 20)
+
+// ---------- 設定 ----------
+len1 = input.int(8, "MA1", minval = 5, group = "均線")
+len2 = input.int(21, "MA2", minval = 5, group = "均線")
+len3 = input.int(55, "MA3", minval = 5, group = "均線")
+len4 = input.int(89, "MA4", minval = 5, group = "均線")
+col1 = input.color(#f59f00, "MA1 顏色", group = "均線")
+col2 = input.color(#22b8cf, "MA2 顏色", group = "均線")
+col3 = input.color(#1c7ed6, "MA3 顏色", group = "均線")
+col4 = input.color(#ae3ec9, "MA4 顏色", group = "均線")
+showDeduct = input.bool(true, "顯示扣抵標記與扣抵價線", group = "扣抵")
+showTable = input.bool(true, "顯示扣抵表", group = "扣抵")
+tablePos = input.string("右上", "扣抵表位置", options = ["右上", "右下", "左上", "左下"], group = "扣抵")
+upCol = input.color(#d9363e, "上揚（紅）", group = "顏色")
+dnCol = input.color(#1e9e57, "下彎（綠）", group = "顏色")
+
+// ---------- 均線 ----------
+ma1 = ta.sma(close, len1)
+ma2 = ta.sma(close, len2)
+ma3 = ta.sma(close, len3)
+ma4 = ta.sma(close, len4)
+plot(ma1, "MA1", col1, 1)
+plot(ma2, "MA2", col2, 1)
+plot(ma3, "MA3", col3, 1)
+plot(ma4, "MA4", col4, 1)
+
+// ---------- 扣抵值（在全域計算，每根 K 棒都算，避免歷史參照不一致） ----------
+d1 = close[len1 - 1]
+d2 = close[len2 - 1]
+d3 = close[len3 - 1]
+d4 = close[len4 - 1]
+h1 = high[len1 - 1]
+h2 = high[len2 - 1]
+h3 = high[len3 - 1]
+h4 = high[len4 - 1]
+
+// 接下來 5 根的扣抵值中，有幾根低於現價
+nextBelow(int len) =>
+    int c = 0
+    for i = 0 to 4
+        if len - 1 - i >= 0 and close[len - 1 - i] < close
+            c += 1
+    c
+
+n1 = nextBelow(len1)
+n2 = nextBelow(len2)
+n3 = nextBelow(len3)
+n4 = nextBelow(len4)
+
+// ---------- 扣抵標記（箭頭標籤＋虛線） ----------
+newLabel(color c) =>
+    label.new(bar_index, close, "", style = label.style_label_down, color = c, textcolor = color.white, size = size.small)
+newLine(color c) =>
+    line.new(bar_index, close, bar_index, close, color = c, style = line.style_dashed, extend = extend.right)
+
+var label lb1 = newLabel(col1)
+var label lb2 = newLabel(col2)
+var label lb3 = newLabel(col3)
+var label lb4 = newLabel(col4)
+var line ln1 = newLine(col1)
+var line ln2 = newLine(col2)
+var line ln3 = newLine(col3)
+var line ln4 = newLine(col4)
+
+setDeduct(label lb, line ln, int len, float d, float h) =>
+    int x = bar_index - (len - 1)
+    if showDeduct and not na(d)
+        label.set_xy(lb, x, h)
+        label.set_text(lb, str.tostring(len) + "扣 " + str.tostring(d, format.mintick))
+        line.set_xy1(ln, x, d)
+        line.set_xy2(ln, bar_index, d)
+    else
+        label.set_xy(lb, bar_index, na)
+        line.set_xy1(ln, bar_index, na)
+        line.set_xy2(ln, bar_index, na)
+
+if barstate.islast
+    setDeduct(lb1, ln1, len1, d1, h1)
+    setDeduct(lb2, ln2, len2, d2, h2)
+    setDeduct(lb3, ln3, len3, d3, h3)
+    setDeduct(lb4, ln4, len4, d4, h4)
+
+// ---------- 扣抵表 ----------
+pos = switch tablePos
+    "右下" => position.bottom_right
+    "左上" => position.top_left
+    "左下" => position.bottom_left
+    => position.top_right
+
+var table tb = table.new(pos, 6, 5, bgcolor = color.new(chart.bg_color, 10), border_color = color.new(chart.fg_color, 85), border_width = 1)
+
+cell(int c, int r, string t, color tc) =>
+    table.cell(tb, c, r, t, text_color = tc, text_size = size.small)
+
+row(int r, int len, float ma, float d, int below, color col) =>
+    fg = chart.fg_color
+    int dir = close > d ? 1 : close < d ? -1 : 0
+    color dirCol = dir > 0 ? upCol : dir < 0 ? dnCol : fg
+    float gap = (d / close - 1) * 100
+    string trend = below >= 4 ? "扣低" : below <= 1 ? "扣高" : "持平"
+    color trendCol = below >= 4 ? upCol : below <= 1 ? dnCol : fg
+    cell(0, r, "MA" + str.tostring(len), col)
+    cell(1, r, str.tostring(ma, format.mintick) + (close > ma ? " 線上" : " 線下"), close > ma ? upCol : dnCol)
+    cell(2, r, str.tostring(d, format.mintick), fg)
+    cell(3, r, dir > 0 ? "上揚 ↗" : dir < 0 ? "下彎 ↘" : "持平", dirCol)
+    cell(4, r, (dir >= 0 ? "跌破 " : "站上 ") + str.tostring(d, format.mintick) + "（" + str.tostring(gap, "+#.##;-#.##") + "%）", fg)
+    cell(5, r, trend, trendCol)
+
+if barstate.islast and showTable
+    fg = chart.fg_color
+    cell(0, 0, "均線", fg)
+    cell(1, 0, "目前值", fg)
+    cell(2, 0, "扣抵值", fg)
+    cell(3, 0, "下一根方向", fg)
+    cell(4, 0, "轉向門檻", fg)
+    cell(5, 0, "接下來5根", fg)
+    row(1, len1, ma1, d1, n1, col1)
+    row(2, len2, ma2, d2, n2, col2)
+    row(3, len3, ma3, d3, n3, col3)
+    row(4, len4, ma4, d4, n4, col4)

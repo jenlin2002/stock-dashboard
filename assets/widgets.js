@@ -7,7 +7,7 @@
   // 代號轉換：上市 TWSE:2330、上櫃 TPEX:6488、美股 NASDAQ:AAPL / NYSE:XXX
   function tvSymbol(item) {
     if (item.code) return (item.market === "TPEX" ? "TPEX" : "TWSE") + ":" + item.code;
-    return (item.exchange || "NASDAQ") + ":" + item.ticker;
+    return (item.exchange || "NASDAQ") + ":" + item.ticker.replace("-", ".");  // BRK-B → BRK.B
   }
 
   // TradingView 免費 Widget 不提供上市（TWSE）股價（只顯示「此商品僅在TradingView上可用」），
