@@ -5,6 +5,12 @@
   --muted: #646b73;
   --border: #e2e5e9;
   --accent: #2962ff;
+  --up: #d9363e;        /* 紅漲 */
+  --down: #1e9e57;      /* 綠跌 */
+  --grid: #eceef1;
+  --series-1: #4c6ef5;  /* 營收長條 */
+  --series-2: #f08c00;  /* 第一條折線（YoY、毛利率） */
+  --series-3: #ae3ec9;  /* 第二條折線（營益率） */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -15,9 +21,17 @@
     --muted: #9aa1a9;
     --border: #2b3036;
     --accent: #5b8cff;
+    --up: #ff6b6b;
+    --down: #40c074;
+    --grid: #262b31;
+    --series-1: #748ffc;
+    --series-2: #ffa94d;
+    --series-3: #da77f2;
     color-scheme: dark;
   }
 }
+.up { color: var(--up); }
+.down { color: var(--down); }
 
 * { box-sizing: border-box; }
 body {
@@ -99,6 +113,54 @@ h2:first-child { margin-top: 4px; }
 }
 .msg { color: var(--muted); padding: 24px 0; }
 
+/* 首頁：上市股票用自己的資料畫的小卡 */
+.own-mini { display: flex; flex-direction: column; height: 100%; padding: 8px 14px 10px; }
+.own-mini .px { font-size: 26px; font-weight: 600; }
+.own-mini .chg { font-size: 15px; margin-left: 6px; }
+.own-mini .sub { color: var(--muted); font-size: 12px; }
+.own-mini svg { flex: 1; width: 100%; min-height: 0; margin-top: 6px; }
+
+/* 個股頁：報價列 */
+.quote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: -4px 0 14px; }
+.quote .px { font-size: 30px; font-weight: 600; }
+.quote .chg { font-size: 16px; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; color: var(--muted); }
+.stats b { color: var(--text); font-weight: 600; }
+.updated { color: var(--muted); font-size: 12px; }
+.btn {
+  display: inline-block; padding: 5px 12px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--card);
+  color: var(--accent); font-size: 14px; text-decoration: none;
+}
+.btn:hover { border-color: var(--accent); }
+
+.two-col.charts-2 .body { height: 300px; }
+.canvas-body { height: 300px; padding: 10px 12px 12px; }
+.note { color: var(--muted); font-size: 12px; padding: 0 14px 10px; }
+
+/* 表格（股利、比較頁） */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+th { color: var(--muted); font-weight: 500; }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* 比較頁 */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button {
+  border: 0; background: var(--card); color: var(--text); padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+th.sort { cursor: pointer; user-select: none; }
+th.sort:hover { color: var(--text); }
+th.sort[aria-sort="ascending"]::after { content: " ▲"; }
+th.sort[aria-sort="descending"]::after { content: " ▼"; }
+tbody tr.link { cursor: pointer; }
+tbody tr.link:hover td { background: var(--bg); }
+
 footer {
   max-width: 1200px; margin: 24px auto 0; padding: 16px;
   border-top: 1px solid var(--border);
@@ -110,4 +172,6 @@ footer {
   .chart-body { height: 420px; }
   .two-col .body { height: 460px; }
   .topbar h1 { font-size: 16px; }
+  .canvas-body, .two-col.charts-2 .body { height: 260px; }
+  th, td { padding: 7px 8px; }
 }

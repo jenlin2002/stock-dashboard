@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>比較｜台美股看盤</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1><a href="index.html">台美股看盤</a></h1>
+  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
+</header>
+
+<main>
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="篩選市場">
+      <button type="button" data-f="all">全部</button>
+      <button type="button" data-f="TW">台股</button>
+      <button type="button" data-f="US">美股</button>
+    </div>
+    <span class="updated" id="updated"></span>
+  </div>
+
+  <section class="panel">
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="head"></tr></thead>
+        <tbody id="rows"><tr><td class="l">載入中…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="note" style="padding:0">點欄位標題排序，再點一次反向；點一列進入個股頁。毛利率、營益率為最新一季；美股沒有月營收。漲跌、YoY 紅色為正、綠色為負。</p>
+</main>
+
+<footer>
+  資料僅供參考，不構成投資建議。資料來源：FinMind、公開資訊觀測站、SEC、Yahoo Finance。
+</footer>
+
+<script src="assets/app.js"></script>
+<script>
+(async function () {
+  const COLS = [
+    { key: "symbol", label: "代號", l: true, fmt: (s) => App.esc(s.symbol) },
+    { key: "name", label: "名稱", l: true, fmt: (s) => App.esc(s.name) },
+    { key: "price", label: "股價", fmt: (s) => (s.market === "US" ? "$" : "") + App.fmtPrice(s.price) },
+    { key: "change_pct", label: "漲跌", fmt: (s) => '<span class="' + App.upDown(s.change_pct) + '">' + App.fmtPct(s.change_pct, true) + "</span>" },
+    { key: "pe", label: "本益比", fmt: (s) => App.fmtNum(s.pe, 2) },
+    { key: "pb", label: "股價淨值比", fmt: (s) => App.fmtNum(s.pb, 2) },
+    { key: "dividend_yield", label: "殖利率", fmt: (s) => App.fmtPct(s.dividend_yield) },
+    { key: "revenue_yoy", label: "月營收 YoY", fmt: (s) => s.revenue_yoy == null ? "—" : '<span class="' + App.upDown(s.revenue_yoy) + '">' + App.fmtPct(s.revenue_yoy, true) + "</span>" + ' <span class="updated">' + App.esc((s.revenue_month || "").slice(2).replace("-", "/")) + "</span>" },
+    { key: "eps_ttm", label: "近四季 EPS", fmt: (s) => App.fmtNum(s.eps_ttm, 2) },
+    { key: "gross_margin", label: "毛利率", fmt: (s) => App.fmtPct(s.gross_margin) },
+    { key: "operating_margin", label: "營益率", fmt: (s) => App.fmtPct(s.operating_margin) },
+    { key: "quarter", label: "財報季", fmt: (s) => App.esc(s.quarter || "—") },
+  ];
+
+  // 篩選、排序記在瀏覽器（只是方便，讀不到也沒關係）
+  let state = { f: "all", key: null, dir: 1 };
+  try { state = Object.assign(state, JSON.parse(localStorage.getItem("compare-state") || "{}")); } catch (e) {}
+  function save() { try { localStorage.setItem("compare-state", JSON.stringify(state)); } catch (e) {} }
+
+  let data;
+  try {
+    data = await App.loadJSON("data/summary.json");
+  } catch (e) {
+    document.getElementById("rows").innerHTML = '<tr><td class="l">讀不到 data/summary.json（排程執行後才會產生）。</td></tr>';
+    return;
+  }
+  document.getElementById("updated").textContent = "資料更新 " + data.updated;
+
+  const head = document.getElementById("head");
+  head.innerHTML = COLS.map((c) => '<th class="sort' + (c.l ? " l" : "") + '" data-key="' + c.key + '" tabindex="0">' + c.label + "</th>").join("");
+  head.addEventListener("click", (e) => sortBy(e.target.closest("th")));
+  head.addEventListener("keydown", (e) => { if (e.key === "Enter") sortBy(e.target.closest("th")); });
+  function sortBy(th) {
+    if (!th) return;
+    const key = th.dataset.key;
+    state.dir = state.key === key ? -state.dir : (COLS.find((c) => c.key === key).l ? 1 : -1);  // 數字欄預設由大到小
+    state.key = key;
+    save();
+    render();
+  }
+
+  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => { state.f = b.dataset.f; save(); render(); }));
+
+  function cmp(a, b) {
+    const x = a[state.key], y = b[state.key];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;   // 空值永遠排最後
+    if (y == null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y, "zh-TW") : x - y) * state.dir;
+  }
+
+  function render() {
+    document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.f === state.f)));
+    head.querySelectorAll("th").forEach((th) => {
+      if (th.dataset.key === state.key) th.setAttribute("aria-sort", state.dir > 0 ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+    });
+    let rows = data.stocks.filter((s) => state.f === "all" || s.market === state.f);
+    if (state.key) rows = rows.slice().sort(cmp);
+    const tbody = document.getElementById("rows");
+    tbody.innerHTML = rows.length
+      ? rows.map((s) => '<tr class="link" data-symbol="' + App.esc(s.symbol) + '">' + COLS.map((c) => "<td" + (c.l ? ' class="l"' : "") + ">" + c.fmt(s) + "</td>").join("") + "</tr>").join("")
+      : '<tr><td class="l">沒有資料。</td></tr>';
+  }
+  document.getElementById("rows").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-symbol]");
+    if (tr) location.href = "stock.html?symbol=" + encodeURIComponent(tr.dataset.symbol);
+  });
+  render();
+})();
+</script>
+</body>
+</html>

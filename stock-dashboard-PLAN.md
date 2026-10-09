@@ -22,7 +22,9 @@
 8. [x] **本人**：SEC 聯絡 email 已存成 GitHub Secret `SEC_USER_AGENT`；Phase 2、3 已 commit + push（2026-10-09）
 9. [x] **Claude Code**：Phase 4（GitHub Actions 自動排程）（2026-10-09 完成，見 Phase 4「實作結果」）
 10. [x] **本人**：手動觸發 workflow #1 成功（2026-10-09，42 秒，綠燈＝兩個 Secret 都有效）。之後把 actions 升到 checkout@v5、setup-python@v6（v4／v5 用的 Node.js 20 已淘汰）。
-11. [ ] **Claude Code**：Phase 5（數據頁），之後 Phase 6
+11. [x] **Claude Code**：Phase 5（數據頁）（2026-10-09 完成，見 Phase 5「實作結果」；顏色本人選定**紅漲綠跌**）
+12. [ ] **本人**：Fetch／Pull 後 commit + push，到網站確認個股頁、比較頁
+13. [ ] **Claude Code**：Phase 6（收尾：README）
 
 **給 Claude Code 的規則**
 - 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
@@ -270,6 +272,19 @@ stock-dashboard/
 3. 數字格式：台股營收以「億元」顯示，美股以「B / M」顯示；正數綠色、負數紅色（或依習慣改成台股的紅漲綠跌，**要統一**）。
 
 **驗收**：個股頁的圖表正常，比較頁可以排序和篩選。
+
+**實作結果（2026-10-09）**
+- 顏色：**紅漲綠跌**（CSS 變數 `--up` 紅、`--down` 綠，深淺色各一組）。用在自己畫的 K 線、報價、比較頁漲跌與 YoY、EPS 柱（與去年同季比：成長紅、衰退綠）。**TradingView 元件（跑馬燈、Mini、Advanced Chart）的配色無法改，仍是綠漲紅跌。**
+- 新增 `assets/charts.js`：K 線用 lightweight-charts 4.1.3（含 20／60 日均線、成交量；台股成交量換算成「張」），其餘用 Chart.js 4.4.1，都從 jsDelivr 載入。深淺色切換時重畫。
+- `stock.html`：
+  - 頂部改為自己的報價列（收盤價、漲跌、本益比、股價淨值比、殖利率、近四季 EPS、收盤日與資料更新日）＋「年報」按鈕（台股→公開資訊觀測站、美股→最新 10-K）。原本的 TradingView Symbol Info 元件拿掉（與報價列重複）。
+  - K 線：上市股票用自己的資料畫；上櫃、美股仍用 TradingView Advanced Chart。
+  - 月營收（台股，近 36 個月，長條＋YoY 折線）、近 8 季營收＋毛利率＋營益率、近 8 季 EPS、股利表。美股季度標示用財報季（FY26 Q3）。
+  - 基本面、公司簡介（TradingView）移到最下面。
+  - 沒有資料檔的股票（例如剛加進清單、排程還沒跑）只顯示 TradingView 部分。
+- `index.html`：上市股票卡片改用自己的資料（收盤價、漲跌、近一年走勢 SVG），不再空白。頁首加「比較」連結。
+- `compare.html`：讀 `data/summary.json`；欄位：代號、名稱、股價、漲跌、本益比、股價淨值比、殖利率、月營收 YoY、近四季 EPS、毛利率、營益率、財報季。點標題排序（數字欄預設由大到小，空值永遠排最後），全部／台股／美股篩選，點列進個股頁。篩選與排序記在瀏覽器 localStorage。
+- 已在本機驗證：4 檔個股頁、首頁、比較頁無 JS 錯誤；手機 375px 無橫向捲動（比較表在框內橫向滑動）；深色模式正常。
 
 ---
 

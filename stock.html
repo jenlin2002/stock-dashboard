@@ -10,40 +10,67 @@
 <body>
 <header class="topbar">
   <h1><a href="index.html">台美股看盤</a></h1>
-  <nav><a href="index.html">← 追蹤清單</a></nav>
+  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 
 <main id="main">
   <div class="stock-head">
     <h2 id="name">載入中…</h2>
     <span class="tag" id="tag"></span>
+    <a class="btn" id="report" target="_blank" rel="noopener" hidden>年報</a>
   </div>
+  <div class="quote" id="quote"></div>
 
-  <section class="panel">
-    <div class="body info-body" id="w-info"></div>
-  </section>
   <section class="panel">
     <h3>K 線</h3>
     <div class="body chart-body" id="w-chart"></div>
+    <p class="note" id="kline-note" hidden>上市股票 TradingView 不開放嵌入，這裡用 FinMind 每日收盤資料自己畫（紅漲綠跌；橘線 20 日均線、紫線 60 日均線；可拖曳、滾輪縮放）。</p>
   </section>
+
+  <section class="panel" id="p-revenue" hidden>
+    <h3>月營收（近 36 個月）</h3>
+    <div class="body canvas-body"><canvas id="c-revenue"></canvas></div>
+  </section>
+
+  <div class="two-col charts-2" id="p-quarterly" hidden>
+    <section class="panel">
+      <h3>近 8 季營收與利潤率</h3>
+      <div class="body canvas-body"><canvas id="c-quarterly"></canvas></div>
+    </section>
+    <section class="panel">
+      <h3>近 8 季 EPS</h3>
+      <div class="body canvas-body"><canvas id="c-eps"></canvas></div>
+      <p class="note">與去年同季相比：成長為紅色、衰退為綠色。</p>
+    </section>
+  </div>
+
+  <section class="panel" id="p-div" hidden>
+    <h3>股利</h3>
+    <div class="table-wrap" id="t-div"></div>
+    <p class="note" id="div-note"></p>
+  </section>
+
   <div class="two-col">
     <section class="panel">
-      <h3>基本面</h3>
+      <h3>基本面（TradingView）</h3>
       <div class="body" id="w-fund"></div>
     </section>
     <section class="panel">
-      <h3>公司簡介</h3>
+      <h3>公司簡介（TradingView）</h3>
       <div class="body" id="w-profile"></div>
     </section>
   </div>
 </main>
 
 <footer>
-  資料僅供參考，不構成投資建議。資料來源：TradingView、TWSE、TPEx、FinMind、SEC。
+  資料僅供參考，不構成投資建議。資料來源：TradingView、FinMind、公開資訊觀測站、SEC、Yahoo Finance。
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/widgets.js"></script>
+<script src="assets/charts.js"></script>
 <script>
 (async function () {
   const symbol = new URLSearchParams(location.search).get("symbol");
@@ -68,10 +95,82 @@
   document.getElementById("tag").textContent = TV.tvSymbol(item);
   document.title = item.name + "｜台美股看盤";
 
-  TV.symbolInfo(document.getElementById("w-info"), item);
-  TV.advancedChart(document.getElementById("w-chart"), item);
   TV.fundamentals(document.getElementById("w-fund"), item);
   TV.profile(document.getElementById("w-profile"), item);
+  if (TV.hasPrice(item)) TV.advancedChart(document.getElementById("w-chart"), item);
+
+  let d = null;
+  try {
+    d = await App.loadStockData(item);
+  } catch (e) {
+    document.getElementById("quote").innerHTML = '<span class="updated">這檔股票還沒有自己的資料（每日排程更新後才會出現）。</span>';
+    if (!TV.hasPrice(item)) TV.advancedChart(document.getElementById("w-chart"), item);  // 顯示「不開放」提示
+    return;
+  }
+
+  renderQuote(d);
+  renderDividends(d);
+  if (d.reports && d.reports.annual_report_url) {
+    const a = document.getElementById("report");
+    a.href = d.reports.annual_report_url;
+    a.textContent = d.market === "TW" ? "年報（公開資訊觀測站）" : "最新 10-K（SEC）";
+    a.hidden = false;
+  }
+  document.getElementById("p-revenue").hidden = !(d.monthly_revenue && d.monthly_revenue.length);
+  document.getElementById("p-quarterly").hidden = !(d.quarterly && d.quarterly.length);
+  document.getElementById("kline-note").hidden = TV.hasPrice(item);
+
+  function drawCharts() {
+    Charts.destroyAll();
+    if (!TV.hasPrice(item) && d.price.dates.length) Charts.kline(document.getElementById("w-chart"), d);
+    if (d.monthly_revenue && d.monthly_revenue.length) Charts.revenue(document.getElementById("c-revenue"), d);
+    if (d.quarterly && d.quarterly.length) {
+      Charts.quarterly(document.getElementById("c-quarterly"), d);
+      Charts.eps(document.getElementById("c-eps"), d);
+    }
+  }
+  drawCharts();
+  App.onThemeChange(drawCharts);
+
+  function renderQuote(d) {
+    const c = d.price.close, n = c.length;
+    const last = c[n - 1], prev = c[n - 2];
+    const diff = App.isNum(prev) ? last - prev : null;
+    const pct = App.isNum(prev) ? diff / prev * 100 : null;
+    const q4 = (d.quarterly || []).slice(-4).map((x) => x.eps);
+    const ttm = q4.length === 4 && q4.every(App.isNum) ? q4.reduce((a, b) => a + b, 0) : null;
+    const val = d.valuation || {};
+    const cls = App.upDown(diff);
+    const cur = d.market === "TW" ? "" : "$";
+    document.getElementById("quote").innerHTML =
+      '<span class="px ' + cls + '">' + cur + App.fmtPrice(last) + '</span>' +
+      '<span class="chg ' + cls + '">' + (diff > 0 ? "+" : "") + App.fmtPrice(diff) + "（" + App.fmtPct(pct, true) + "）</span>" +
+      '<span class="stats">' +
+        "<span>本益比 <b>" + App.fmtNum(val.pe, 2) + "</b></span>" +
+        "<span>股價淨值比 <b>" + App.fmtNum(val.pb, 2) + "</b></span>" +
+        "<span>殖利率 <b>" + App.fmtPct(val.dividend_yield) + "</b></span>" +
+        "<span>近四季 EPS <b>" + App.fmtNum(ttm, 2) + "</b></span>" +
+      "</span>" +
+      '<span class="updated">收盤 ' + App.esc(d.price.dates[n - 1]) + "・資料更新 " + App.esc(d.updated) + "</span>";
+  }
+
+  function renderDividends(d) {
+    const rows = (d.dividends || []).slice().reverse();
+    if (!rows.length) return;
+    const tw = d.market === "TW";
+    const thisYear = new Date().getFullYear();
+    let html = "<table><thead><tr><th>年度</th><th>現金股利" + (tw ? "（元）" : "（美元）") + "</th>" +
+      (tw ? "<th>股票股利（元）</th><th>合計（元）</th>" : "") + "</tr></thead><tbody>";
+    for (const r of rows) {
+      html += "<tr><td>" + r.year + (r.year >= thisYear ? "（至今）" : "") + "</td><td>" + App.fmtNum(r.cash, tw ? 2 : 4) + "</td>" +
+        (tw ? "<td>" + App.fmtNum(r.stock, 2) + "</td><td>" + App.fmtNum(r.cash + r.stock, 2) + "</td>" : "") + "</tr>";
+    }
+    document.getElementById("t-div").innerHTML = html + "</tbody></table>";
+    document.getElementById("div-note").textContent = tw
+      ? "依股利所屬年度加總（例：「114年第3季」算 2025 年）。"
+      : "依除息日的年份加總，已依股票分割調整。";
+    document.getElementById("p-div").hidden = false;
+  }
 })();
 </script>
 </body>

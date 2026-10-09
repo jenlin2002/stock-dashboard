@@ -10,7 +10,7 @@
 <body>
 <header class="topbar">
   <h1><a href="index.html">台美股看盤</a></h1>
-  <nav><a href="index.html">追蹤清單</a></nav>
+  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 <div class="tape" id="tape"></div>
 
@@ -22,7 +22,7 @@
 </main>
 
 <footer>
-  資料僅供參考，不構成投資建議。資料來源：TradingView、TWSE、TPEx、FinMind、SEC。
+  資料僅供參考，不構成投資建議。資料來源：TradingView、FinMind、公開資訊觀測站、SEC、Yahoo Finance。
 </footer>
 
 <script src="assets/app.js"></script>
@@ -49,8 +49,30 @@
       a.querySelector("strong").textContent = item.name;
       a.querySelector("span").textContent = sym;
       el.appendChild(a);
-      TV.miniOverview(a.querySelector(".mini"), item);
+      if (TV.hasPrice(item)) TV.miniOverview(a.querySelector(".mini"), item);
+      else ownMini(a.querySelector(".mini"), item);
     }
+  }
+
+  // 上市股票：TradingView 不給報價，改用自己的日 K 資料畫近一年走勢（紅漲綠跌）
+  async function ownMini(host, item) {
+    let d;
+    try { d = await App.loadStockData(item); } catch (e) { return TV.miniOverview(host, item); }
+    const c = d.price.close.slice(-250), dates = d.price.dates.slice(-250), n = c.length;
+    if (n < 2) return TV.miniOverview(host, item);
+    const diff = c[n - 1] - c[n - 2], pct = diff / c[n - 2] * 100;
+    const yearCls = App.upDown(c[n - 1] - c[0]);
+    const min = Math.min(...c), max = Math.max(...c), W = 300, H = 100;
+    const pts = c.map((x, i) => (i / (n - 1) * W).toFixed(1) + "," + (H - (x - min) / (max - min || 1) * H).toFixed(1)).join(" ");
+    host.innerHTML =
+      '<div class="own-mini">' +
+        '<div><span class="px ' + App.upDown(diff) + '">' + App.fmtPrice(c[n - 1]) + '</span>' +
+        '<span class="chg ' + App.upDown(diff) + '">' + App.fmtPct(pct, true) + '</span></div>' +
+        '<div class="sub">收盤 ' + App.esc(dates[n - 1]) + "・近一年 " + App.fmtPct((c[n - 1] / c[0] - 1) * 100, true) + "</div>" +
+        '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+          '<polyline points="' + pts + '" fill="none" stroke="var(--' + (yearCls || "muted") + ')" stroke-width="1.6" vector-effect="non-scaling-stroke"/>' +
+        "</svg>" +
+      "</div>";
   }
   addCards(w.tw, document.getElementById("tw"));
   addCards(w.us, document.getElementById("us"));
