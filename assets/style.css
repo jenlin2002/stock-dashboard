@@ -79,8 +79,18 @@ a { color: var(--accent); }
 .live-note .btn { padding: 1px 8px; font-size: 12px; }
 
 .tape { border-bottom: 1px solid var(--border); min-height: 46px; background: var(--card); }
-.own-tape { display: flex; gap: 22px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; font-size: 14px; }
-.own-tape a { color: var(--text); text-decoration: none; }
+/* 頁首跑馬燈：自動往左捲動，滑鼠移上去暫停；系統設定「減少動態效果」時改成可橫向拖動的靜態列 */
+.own-tape { overflow: hidden; padding: 12px 0; white-space: nowrap; font-size: 14px; }
+.own-tape .track { display: inline-flex; animation: tape linear infinite; }
+.own-tape .dup { display: inline-flex; }
+.own-tape:hover .track { animation-play-state: paused; }
+@keyframes tape { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .own-tape { overflow-x: auto; }
+  .own-tape .track { animation: none; padding-left: 16px; }
+  .own-tape .dup[aria-hidden="true"] { display: none; }
+}
+.own-tape a { color: var(--text); text-decoration: none; padding-right: 28px; }
 .own-tape a:hover b { color: var(--accent); }
 
 main { max-width: 1200px; margin: 0 auto; padding: 16px; }

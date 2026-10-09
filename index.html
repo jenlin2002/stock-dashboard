@@ -58,10 +58,17 @@
   async function ownTape(host) {
     let s;
     try { s = await App.loadJSON("data/summary.json"); } catch (e) { return TV.tickerTape(host, [...w.tw, ...w.us]); }
-    host.innerHTML = '<div class="own-tape">' + s.stocks.map((x) =>
+    const one = s.stocks.map((x) =>
       '<a href="stock.html?symbol=' + encodeURIComponent(x.symbol) + '"><b>' + App.esc(x.name) + "</b> " +
       (x.market === "US" ? "$" : "") + App.fmtPrice(x.price) +
-      ' <span class="' + App.upDown(x.change_pct) + '">' + App.fmtPct(x.change_pct, true) + "</span></a>").join("") + "</div>";
+      ' <span class="' + App.upDown(x.change_pct) + '">' + App.fmtPct(x.change_pct, true) + "</span></a>").join("");
+    // 股票少時重複幾次，讓半條就比螢幕寬（約 16 檔以上），循環時右邊才不會出現空白
+    const reps = Math.max(1, Math.ceil(16 / Math.max(1, s.stocks.length)));
+    const half = one.repeat(reps);
+    // 內容放兩份、整條往左移一半，接起來就是無縫循環；每檔約 4 秒，速度固定
+    host.innerHTML = '<div class="own-tape"><div class="track" style="animation-duration:' + (s.stocks.length * reps * 4) + 's">' +
+      '<span class="dup">' + half + '</span><span aria-hidden="true" class="dup">' + half + "</span></div></div>";
+    host.querySelectorAll('[aria-hidden="true"] a').forEach((a) => a.tabIndex = -1);
   }
 
   // 卡片：用自己的日 K 資料畫近一年走勢（紅漲綠跌）；沒有資料檔時退回 TradingView
