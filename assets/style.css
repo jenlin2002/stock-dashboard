@@ -295,6 +295,8 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 .refs-dot.na { border: 0; background: none; font-size: 17px; line-height: 17px; text-align: center; color: var(--muted); }
 .refs-dot.few { border-style: dashed; border-color: var(--muted); }
+.est { color: var(--muted); }               /* 推估值（例：推估 PEG） */
+.est sup { font-size: 10px; margin-left: 1px; }
 .refs-help { font-size: 14px; color: var(--muted); line-height: 1.8; }
 .refs-help b { color: var(--text); }
 .refs-help .refs-dot { vertical-align: -3px; margin-right: 2px; }

@@ -36,6 +36,7 @@ FIELDS = [
     "eps_prev",                                                # 一年前的近四季 EPS（去年同一季財報）
     "eps_growth",                                              # 近四季 EPS 成長率 %
     "peg",                                                     # 本益比 ÷ EPS 成長率（EPS ≤ 0 或成長 ≤ 0 不計）
+    "peg_est", "peg_note",                                     # 推估 PEG（本益比 ÷ 累計營收成長）與原因說明
     "roe",                                                     # 近四季 EPS ÷ 每股淨值 %
     "debt_ratio", "bvps",                                      # 負債比 %（負債÷資產）、每股淨值
     "rev_ttm", "psr",                                          # 近 12 個月營收（元）、股價營收比＝市值 ÷ 近 12 個月營收
@@ -214,6 +215,21 @@ def main():
             # 成長超過 100% 多半是去年 EPS 太低（低基期），PEG 會失真，不計算
             if pe and 0 < s["eps_growth"] <= 100:
                 s["peg"] = r2(pe / s["eps_growth"])
+    # 推估 PEG：有獲利（有本益比）但 EPS 成長不能用時（衰退、低基期、沒有去年同季可比），
+    # 改用今年累計營收成長率推估（標示「估」）；推不出來就記原因，網頁顯示原因而不是空白
+    for s in stocks.values():
+        if s.get("peg") is not None or not s.get("close"):
+            continue
+        pe, g, rg = s.get("pe"), s.get("eps_growth"), s.get("rev_cum_yoy")
+        if not pe:
+            s["peg_note"] = "虧損"
+            continue
+        why = "EPS 衰退" if g is not None and g <= 0 else "基期低" if g is not None and g > 100 else "無去年可比"
+        if rg is not None and 0 < rg <= 100:
+            s["peg_est"] = r2(pe / rg)
+            s["peg_note"] = f"{why}，以累計營收成長 {rg:.1f}% 推估"
+        else:
+            s["peg_note"] = why + ("，營收也衰退" if rg is not None and rg <= 0 else "")
 
     # ---- 資產負債表：負債比、每股淨值、ROE ----
     for code, b in fundamentals.balance_sheets().items():

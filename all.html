@@ -68,8 +68,10 @@
     { k: "volume", t: "成交量(張)", f: (s) => App.fmtNum(s.volume) },
     { k: "mktcap", t: "市值(億)", f: (s) => yi(s.mktcap) },
     { k: "pe", t: "本益比", asc: true, f: (s) => App.fmtNum(s.pe, 2) },
-    { k: "peg", t: "PEG", asc: true, f: (s) => (App.isNum(s.peg) ? App.fmtNum(s.peg, 2) + " " + Refs.dot(pegLv[s.code], "PEG 和全市場比")
-      : s.eps_growth > 100 ? '<span class="updated" title="EPS 成長超過 100%，多半是去年基期太低，PEG 不計算">基期低</span>' : "—") },
+    // PEG：實際值；沒有時用推估值（灰字「估」，本益比 ÷ 累計營收成長）；都沒有就顯示原因
+    { k: "peg_any", t: "PEG", asc: true, f: (s) => (App.isNum(s.peg) ? App.fmtNum(s.peg, 2) + " " + Refs.dot(pegLv[s.code], "PEG 和全市場比")
+      : App.isNum(s.peg_est) ? '<span class="est" title="' + App.esc(s.peg_note) + '">' + App.fmtNum(s.peg_est, 2) + "<sup>估</sup></span> " + Refs.dot(pegLv[s.code], "推估 PEG 和全市場比")
+      : '<span class="updated" title="' + App.esc(s.peg_note || "") + '">' + App.esc((s.peg_note || "—").split("，")[0]) + "</span>") },
     { k: "eps_growth", t: "EPS成長", f: (s) => pctCell(s.eps_growth) },
     { k: "roe", t: "ROE", f: (s) => App.fmtPct(s.roe) },
     { k: "yield", t: "殖利率", f: (s) => App.fmtPct(s.yield) },
@@ -93,7 +95,8 @@
     return;
   }
   const all = data.rows.map((r) => Object.fromEntries(data.fields.map((f, i) => [f, r[i]])));
-  const pegLv = Refs.levelsFor(all, "peg");  // PEG 的全市場五分位燈號
+  all.forEach((s) => { s.peg_any = App.isNum(s.peg) ? s.peg : s.peg_est; });  // 排序用：實際值優先，沒有就用推估值
+  const pegLv = Refs.levelsFor(all, "peg");  // PEG 的全市場五分位燈號（推估值也和實際 PEG 的分布比）
   const industryView = new URLSearchParams(location.search).get("view") === "industry";
   if (industryView) document.getElementById("title").textContent = "全台股總表・依產業";
 
@@ -213,7 +216,7 @@
   const dates = all.map((s) => s.date).filter(Boolean).sort();
   document.getElementById("foot").textContent =
     "收盤 " + (dates[dates.length - 1] || "—") + "・月營收 " + (revMonth || "—") + "（官方彙總較個股公布晚幾天）・資料更新 " + data.updated +
-    "。近四季 EPS＝股價 ÷ 本益比；EPS 成長＝近四季 EPS 對一年前的近四季 EPS；PEG＝本益比 ÷ EPS 成長（虧損、衰退不計；成長超過 100% 多為低基期，標「基期低」不計），圓圈為全市場五分位（全滿＝最便宜的 20%）；" +
+    "。近四季 EPS＝股價 ÷ 本益比；EPS 成長＝近四季 EPS 對一年前的近四季 EPS；PEG＝本益比 ÷ EPS 成長（成長須在 0～100%）；EPS 衰退、低基期或沒有去年可比時，以「本益比 ÷ 今年累計營收成長」推估，灰字標「估」（滑鼠移上去看原因），虧損或營收也衰退則顯示原因；圓圈為全市場五分位（全滿＝最便宜的 20%）；" +
     "ROE＝近四季 EPS ÷ 每股淨值；營收比＝市值 ÷ 近 12 個月營收；負債比＝負債 ÷ 資產；今年 EPS、毛利率、營益率為今年以來累計，金融業沒有毛利率。";
   render();
 })();

@@ -80,9 +80,16 @@
     GROUPS.forEach((g, gi) => {
       html += '<div class="refs-sec refs-grid">' + (gi === 0 ? '<span class="refs-h"></span><span class="refs-h"></span><span class="refs-h">m</span><span class="refs-h">s</span>' : "");
       g.forEach((m) => {
-        const lowBase = m.k === "peg" && !App.isNum(s.peg) && s.eps_growth > 100;  // 成長 > 100%：低基期，PEG 不計
-        html += '<span class="refs-l">' + m.t + '</span><span class="refs-v">' + (lowBase ? '<span title="EPS 成長超過 100%，多半是去年基期太低">基期低</span>' : fmt(s[m.k], m)) + "</span>" +
-          dot(level(s[m.k], d.rows, m), "和全市場比") + dot(level(s[m.k], peers, m), "和" + s.industry + "比");
+        const v = valueOf(s, m);
+        let shown = fmt(v, m);
+        if (m.k === "peg" && !App.isNum(s.peg)) {
+          // 推估值標「估」；推不出來就顯示原因（虧損、衰退…）
+          shown = App.isNum(s.peg_est)
+            ? '<span class="est" title="' + App.esc(s.peg_note) + '">' + fmt(v, m) + "<sup>估</sup></span>"
+            : '<span title="' + App.esc(s.peg_note || "") + '">' + App.esc((s.peg_note || "na").split("，")[0]) + "</span>";
+        }
+        html += '<span class="refs-l">' + m.t + '</span><span class="refs-v">' + shown + "</span>" +
+          dot(level(v, d.rows, m), "和全市場比") + dot(level(v, peers, m), "和" + s.industry + "比");
       });
       html += "</div>";
     });
@@ -102,8 +109,13 @@
   function levelsFor(rows, k) {
     const m = GROUPS.flat().find((x) => x.k === k);
     const out = {};
-    rows.forEach((s) => { out[s.code] = level(s[k], rows, m); });
+    rows.forEach((s) => { out[s.code] = level(valueOf(s, m), rows, m); });
     return out;
+  }
+
+  // PEG 沒有實際值時用推估值（和實際 PEG 的分布比較）
+  function valueOf(s, m) {
+    return m.k === "peg" && !App.isNum(s.peg) && App.isNum(s.peg_est) ? s.peg_est : s[m.k];
   }
 
   window.Refs = { render, load, levelsFor, dot, LEVEL_TEXT };
