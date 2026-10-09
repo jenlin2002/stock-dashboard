@@ -21,7 +21,7 @@
 7. [x] **Claude Code**：Phase 3（美股資料）（2026-10-09 完成，見 Phase 3「實作結果」）
 8. [x] **本人**：SEC 聯絡 email 已存成 GitHub Secret `SEC_USER_AGENT`；Phase 2、3 已 commit + push（2026-10-09）
 9. [x] **Claude Code**：Phase 4（GitHub Actions 自動排程）（2026-10-09 完成，見 Phase 4「實作結果」）
-10. [ ] **本人**：push 後到 GitHub → Actions → 「更新股票資料」→ Run workflow 手動觸發一次，確認綠燈且出現自動 commit
+10. [x] **本人**：手動觸發 workflow #1 成功（2026-10-09，42 秒，綠燈＝兩個 Secret 都有效）。之後把 actions 升到 checkout@v5、setup-python@v6（v4／v5 用的 Node.js 20 已淘汰）。
 11. [ ] **Claude Code**：Phase 5（數據頁），之後 Phase 6
 
 **給 Claude Code 的規則**
