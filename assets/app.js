@@ -6,9 +6,31 @@
     return res.json();
   }
 
+  // 追蹤清單：讀網站上的 config/watchlist.json。
+  // 剛用「＋」或「×」改過時，GitHub 上的檔案已更新、但網站還沒重新部署（約 1～3 分鐘），
+  // 這段期間用改完後 API 回傳的清單（存在瀏覽器 15 分鐘）。
+  const OVERRIDE_KEY = "watchlist-override", OVERRIDE_MS = 15 * 60 * 1000;
   async function loadWatchlist() {
+    try {
+      const o = JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "null");
+      if (o && Date.now() - o.ts < OVERRIDE_MS) return { tw: o.data.tw || [], us: o.data.us || [] };
+      localStorage.removeItem(OVERRIDE_KEY);
+    } catch (e) {}
     const w = await loadJSON("config/watchlist.json");
     return { tw: w.tw || [], us: w.us || [] };
+  }
+
+  // 新增／移除追蹤股票：呼叫 functions/api/watchlist.js（它會改 GitHub 上的 watchlist.json）
+  async function editWatchlist(action, market, item) {
+    const res = await fetch("api/watchlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, market, item }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "修改失敗（" + res.status + "）");
+    try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify({ ts: Date.now(), data: body.watchlist })); } catch (e) {}
+    return body.watchlist;
   }
 
   function symbolOf(item) { return item.code || item.ticker; }
@@ -40,6 +62,29 @@
   function loadStockList() {
     if (!stockListPromise) stockListPromise = loadJSON("data/stocklist.json").catch((e) => { stockListPromise = null; throw e; });
     return stockListPromise;
+  }
+
+  // 搜尋全部股票（代號或名稱）：代號完全相符 > 代號開頭 > 名稱開頭 > 名稱包含
+  // 回傳 [{ symbol, name, tag, m, item }]，item 是 watchlist 格式
+  async function searchStocks(query, limit) {
+    const q = String(query || "").trim().toUpperCase();
+    if (!q) return [];
+    const list = await loadStockList();
+    const score = (code, name) => {
+      const c = code.toUpperCase(), n = name.toUpperCase();
+      return c === q ? 0 : c.startsWith(q) ? 1 : n.startsWith(q) ? 2 : n.includes(q) ? 3 : -1;
+    };
+    const out = [];
+    for (const [code, name, market, industry] of list.tw) {
+      const sc = score(code, name);
+      if (sc >= 0) out.push({ sc, symbol: code, name, m: "tw", tag: (market === "TWSE" ? "上市" : "上櫃") + (industry ? "・" + industry : ""), item: { code, name, market } });
+    }
+    for (const [ticker, name, exch] of list.us) {
+      const sc = score(ticker, name);
+      if (sc >= 0) out.push({ sc, symbol: ticker, name, m: "us", tag: exch, item: { ticker, name, exchange: exch } });
+    }
+    out.sort((a, b) => a.sc - b.sc || a.symbol.length - b.symbol.length || (a.symbol < b.symbol ? -1 : 1));
+    return out.slice(0, limit || 10);
   }
 
   // 在清單裡找代號，回傳與 watchlist 相同格式的 item；m 可指定 "tw" / "us"
@@ -109,7 +154,7 @@
   }
 
   window.App = {
-    loadJSON, loadWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadStockList, lookupStock,
+    loadJSON, loadWatchlist, editWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadStockList, lookupStock, searchStocks,
     isNum, fmtNum, fmtPrice, fmtRevenue, revenueUnit, fmtPct, upDown, cssVar, onThemeChange, esc,
   };
 })();

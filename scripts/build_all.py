@@ -1,0 +1,205 @@
+"""全台股總表：上市＋上櫃普通股（公司，不含 ETF），輸出 data/all/stocks.json。
+
+資料來源都是一次拿全部股票的官方 OpenAPI（證交所 TWSE、櫃買中心 TPEx）：
+  公司基本資料  TWSE opendata/t187ap03_L        TPEx mopsfin_t187ap03_O   （範圍＝公司，自然排除 ETF）
+  每日收盤      TWSE exchangeReport/STOCK_DAY_ALL TPEx tpex_mainboard_daily_close_quotes
+  本益比等      TWSE exchangeReport/BWIBBU_ALL    TPEx tpex_mainboard_peratio_analysis
+  月營收        TWSE opendata/t187ap05_L        TPEx mopsfin_t187ap05_O
+  綜合損益      TWSE opendata/t187ap06_L_{ci,basi,bd,fh,ins,mim}（一般業、銀行、證券、金控、保險、其他）
+               TPEx mopsfin_t187ap06_O_{同上}
+
+輸出用「欄位表＋列陣列」省空間：{"updated", "fields": [...], "rows": [[...], ...]}
+"""
+import json
+import sys
+import time
+
+import requests
+
+from common import DATA, load_json, log, today_str, warn
+
+TWSE = "https://openapi.twse.com.tw/v1/"
+TPEX = "https://www.tpex.org.tw/openapi/v1/"
+IS_KINDS = ["ci", "basi", "bd", "fh", "ins", "mim"]
+
+FIELDS = [
+    "code", "name", "market", "industry",
+    "date", "close", "change", "change_pct", "volume",          # volume：張
+    "mktcap",                                                  # 市值（元）＝收盤 × 已發行普通股數
+    "pe", "pb", "yield",
+    "rev_month", "rev", "rev_mom", "rev_yoy", "rev_cum_yoy",    # rev：元
+    "eps_period", "eps_ytd", "gross_margin", "op_margin",      # 最新一季累計（年初至今）
+    "eps_ttm",                                                 # 近四季 EPS ≈ 收盤 ÷ 本益比（證交所本益比即以近四季 EPS 計）
+]
+
+session = requests.Session()
+session.headers["User-Agent"] = "Mozilla/5.0 (stock-dashboard)"
+
+
+def get(url):
+    for attempt in range(3):
+        try:
+            r = session.get(url, timeout=90)
+            r.raise_for_status()
+            text = r.text.strip()
+            return json.loads(text) if text.startswith("[") else []
+        except Exception as e:
+            if attempt == 2:
+                warn(f"{url} 失敗：{e}")
+                return []
+            time.sleep(3)
+
+
+def num(x):
+    """'1,234.5' / ' -0.10 ' / '--' / '' → float 或 None"""
+    if x is None:
+        return None
+    s = str(x).replace(",", "").strip()
+    if s in ("", "-", "--", "---", "N/A", "除權息", "除息", "除權"):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def roc_date(s):
+    """'1151008' → '2026-10-08'"""
+    s = str(s or "").strip()
+    if len(s) < 7:
+        return None
+    return f"{int(s[:-4]) + 1911}-{s[-4:-2]}-{s[-2:]}"
+
+
+def roc_month(s):
+    """'11508' → '2026-08'"""
+    s = str(s or "").strip()
+    if len(s) < 5:
+        return None
+    return f"{int(s[:-2]) + 1911}-{s[-2:]}"
+
+
+def pick(d, *keys):
+    for k in keys:
+        if k in d and d[k] not in (None, ""):
+            return d[k]
+    return None
+
+
+def r2(x, n=2):
+    return None if x is None else round(x, n)
+
+
+def main():
+    stocks = {}
+
+    # ---- 公司（範圍） ----
+    for market, url, code_k, name_k, shares_k in (
+        ("TWSE", TWSE + "opendata/t187ap03_L", "公司代號", "公司簡稱", "已發行普通股數或TDR原股發行股數"),
+        ("TPEX", TPEX + "mopsfin_t187ap03_O", "SecuritiesCompanyCode", "CompanyAbbreviation", "IssueShares"),
+    ):
+        for x in get(url):
+            code = str(x.get(code_k, "")).strip()
+            if code:
+                stocks[code] = {"code": code, "name": str(x.get(name_k, "")).strip(), "market": market, "industry": None, "_shares": num(x.get(shares_k))}
+    if not stocks:
+        warn("抓不到公司清單，中止")
+        return 1
+
+    # ---- 產業名稱：月營收資料帶中文產業別；沒有的用 FinMind 清單（data/stocklist.json）補 ----
+    rev_rows = get(TWSE + "opendata/t187ap05_L") + get(TPEX + "mopsfin_t187ap05_O")
+    for x in rev_rows:
+        s = stocks.get(str(x.get("公司代號", "")).strip())
+        if s and x.get("產業別"):
+            s["industry"] = x["產業別"].strip()
+    sl = load_json(DATA / "stocklist.json") or {}
+    fm_ind = {row[0]: row[3] for row in sl.get("tw", [])}
+    # FinMind 的產業名稱有少數和證交所不同，統一成證交所的叫法
+    SAME = {"金融業": "金融保險業", "電子工業": "其他電子業"}
+    for s in stocks.values():
+        if not s["industry"]:
+            s["industry"] = fm_ind.get(s["code"]) or "其他"
+        s["industry"] = SAME.get(s["industry"], s["industry"])
+
+    # ---- 每日收盤 ----
+    for x in get(TWSE + "exchangeReport/STOCK_DAY_ALL"):
+        s = stocks.get(x.get("Code"))
+        if not s:
+            continue
+        close, chg = num(x.get("ClosingPrice")), num(x.get("Change"))
+        s.update(date=roc_date(x.get("Date")), close=close, change=chg, volume=(num(x.get("TradeVolume")) or 0) // 1000)
+    for x in get(TPEX + "tpex_mainboard_daily_close_quotes"):
+        s = stocks.get(x.get("SecuritiesCompanyCode"))
+        if not s:
+            continue
+        close, chg = num(x.get("Close")), num(x.get("Change"))
+        s.update(date=roc_date(x.get("Date")), close=close, change=chg, volume=(num(x.get("TradingShares")) or 0) // 1000)
+    for s in stocks.values():
+        c, d = s.get("close"), s.get("change")
+        s["change_pct"] = r2(d / (c - d) * 100) if c and d is not None and c - d else None
+
+    # ---- 本益比、殖利率、股價淨值比 ----
+    for x in get(TWSE + "exchangeReport/BWIBBU_ALL"):
+        s = stocks.get(x.get("Code"))
+        if s:
+            s.update(pe=num(x.get("PEratio")), pb=num(x.get("PBratio")), **{"yield": num(x.get("DividendYield"))})
+    for x in get(TPEX + "tpex_mainboard_peratio_analysis"):
+        s = stocks.get(x.get("SecuritiesCompanyCode"))
+        if s:
+            s.update(pe=num(x.get("PriceEarningRatio")), pb=num(x.get("PriceBookRatio")), **{"yield": num(x.get("YieldRatio"))})
+
+    # ---- 月營收（千元 → 元） ----
+    for x in rev_rows:
+        s = stocks.get(str(x.get("公司代號", "")).strip())
+        if not s:
+            continue
+        rev = num(x.get("營業收入-當月營收"))
+        s.update(
+            rev_month=roc_month(x.get("資料年月")),
+            rev=None if rev is None else int(rev * 1000),
+            rev_mom=r2(num(x.get("營業收入-上月比較增減(%)"))),
+            rev_yoy=r2(num(x.get("營業收入-去年同月增減(%)"))),
+            rev_cum_yoy=r2(num(x.get("累計營業收入-前期比較增減(%)"))),
+        )
+
+    # ---- 綜合損益：最新一季（年初至今累計）EPS、毛利率、營益率 ----
+    for kind in IS_KINDS:
+        for base, prefix in ((TWSE, "opendata/t187ap06_L_"), (TPEX, "mopsfin_t187ap06_O_")):
+            for x in get(base + prefix + kind):
+                code = str(pick(x, "公司代號", "SecuritiesCompanyCode") or "").strip()
+                s = stocks.get(code)
+                if not s:
+                    continue
+                year, season = pick(x, "年度", "Year"), pick(x, "季別", "Season")
+                rev = num(pick(x, "營業收入", "淨收益", "收益"))
+                gross = num(pick(x, "營業毛利（毛損）淨額", "營業毛利（毛損）"))
+                op = num(pick(x, "營業利益（損失）"))
+                s.update(
+                    eps_period=f"{int(year) + 1911}Q{int(season)}" if year and season else None,
+                    eps_ytd=num(pick(x, "基本每股盈餘（元）")),
+                    gross_margin=r2(gross / rev * 100) if gross is not None and rev else None,
+                    op_margin=r2(op / rev * 100) if op is not None and rev else None,
+                )
+
+    for s in stocks.values():
+        pe, c = s.get("pe"), s.get("close")
+        s["eps_ttm"] = r2(c / pe) if pe and c else None
+        s["mktcap"] = int(c * s["_shares"]) if c and s.get("_shares") else None
+        if s.get("volume") is not None:
+            s["volume"] = int(s["volume"])
+
+    rows = [[s.get(f) for f in FIELDS] for s in sorted(stocks.values(), key=lambda s: s["code"])]
+    out = {"updated": today_str(), "fields": FIELDS, "rows": rows}
+    path = DATA / "all" / "stocks.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write('{"updated":' + json.dumps(out["updated"]) + ',"fields":' + json.dumps(FIELDS) + ',"rows":[\n')
+        f.write(",\n".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) for r in rows))
+        f.write("\n]}\n")
+    priced = sum(1 for s in stocks.values() if s.get("close"))
+    log(f"all/stocks.json：{len(rows)} 家（有收盤價 {priced}），{path.stat().st_size // 1024} KB")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

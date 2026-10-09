@@ -70,6 +70,12 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: python scripts/build_stocklist.py
 
+      # 全台股總表（證交所、櫃買中心 OpenAPI，一次拿全部股票）
+      - name: 更新全台股總表 all/stocks.json
+        if: github.event.schedule == '0 8 * * 1-5' || github.event_name != 'schedule'
+        continue-on-error: true
+        run: python scripts/build_all.py
+
       - name: 有變更才 commit 並 push
         run: |
           git config user.name "github-actions[bot]"

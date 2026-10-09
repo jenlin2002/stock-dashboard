@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>全台股總表｜台美股看盤</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1><a href="index.html">台美股看盤</a></h1>
+  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
+</header>
+
+<main class="wide">
+  <h2 id="title">全台股總表</h2>
+
+  <section class="panel" id="p-industry" hidden>
+    <h3>產業總覽 <span class="updated">（點產業只看該產業；漲跌為市值加權）</span></h3>
+    <div class="table-wrap"><table id="t-industry"></table></div>
+  </section>
+
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="市場">
+      <button type="button" data-mk="all">全部</button>
+      <button type="button" data-mk="TWSE">上市</button>
+      <button type="button" data-mk="TPEX">上櫃</button>
+    </div>
+    <select id="f-ind" aria-label="產業"><option value="">全部產業</option></select>
+    <input type="search" id="f-q" placeholder="篩選代號或名稱" aria-label="篩選代號或名稱">
+    <span class="updated" id="count"></span>
+  </div>
+
+  <section class="panel">
+    <div class="table-wrap big-table" id="wrap">
+      <table id="t-all">
+        <thead><tr id="head"></tr></thead>
+        <tbody id="rows"><tr><td class="l">載入中…</td></tr></tbody>
+      </table>
+      <div id="more" class="note"></div>
+    </div>
+  </section>
+  <p class="note" style="padding:0" id="foot"></p>
+</main>
+
+<footer>
+  資料僅供參考，不構成投資建議。資料來源：臺灣證券交易所、證券櫃檯買賣中心 OpenAPI。
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search.js"></script>
+<script>
+(async function () {
+  const yi = (x) => (App.isNum(x) ? App.fmtNum(x / 1e8, x >= 1e11 ? 0 : 1) : "—");  // 元 → 億
+  const pctCell = (x) => '<span class="' + App.upDown(x) + '">' + App.fmtPct(x, true) + "</span>";
+  // l：靠左；asc：預設由小到大（其餘數字欄預設由大到小）
+  const COLS = [
+    { k: "code", t: "代號", l: true, asc: true, f: (s) => App.esc(s.code) },
+    { k: "name", t: "名稱", l: true, asc: true, f: (s) => App.esc(s.name) },
+    { k: "industry", t: "產業", l: true, asc: true, f: (s) => App.esc(s.industry) },
+    { k: "market", t: "市場", l: true, asc: true, f: (s) => (s.market === "TWSE" ? "上市" : "上櫃") },
+    { k: "close", t: "股價", f: (s) => App.fmtPrice(s.close) },
+    { k: "change_pct", t: "漲跌", f: (s) => pctCell(s.change_pct) },
+    { k: "volume", t: "成交量(張)", f: (s) => App.fmtNum(s.volume) },
+    { k: "mktcap", t: "市值(億)", f: (s) => yi(s.mktcap) },
+    { k: "pe", t: "本益比", asc: true, f: (s) => App.fmtNum(s.pe, 2) },
+    { k: "peg", t: "PEG", asc: true, f: (s) => App.fmtNum(s.peg, 2) },
+    { k: "yield", t: "殖利率", f: (s) => App.fmtPct(s.yield) },
+    { k: "pb", t: "淨值比", asc: true, f: (s) => App.fmtNum(s.pb, 2) },
+    { k: "rev", t: "月營收(億)", f: (s) => yi(s.rev) },
+    { k: "rev_yoy", t: "營收YoY", f: (s) => pctCell(s.rev_yoy) },
+    { k: "rev_cum_yoy", t: "累計YoY", f: (s) => pctCell(s.rev_cum_yoy) },
+    { k: "eps_ttm", t: "近四季EPS", f: (s) => App.fmtNum(s.eps_ttm, 2) },
+    { k: "eps_ytd", t: "今年EPS", f: (s) => App.fmtNum(s.eps_ytd, 2) + (s.eps_period ? ' <span class="updated">' + s.eps_period.slice(4) + "</span>" : "") },
+    { k: "gross_margin", t: "毛利率", f: (s) => App.fmtPct(s.gross_margin) },
+    { k: "op_margin", t: "營益率", f: (s) => App.fmtPct(s.op_margin) },
+  ];
+
+  let data;
+  try {
+    data = await App.loadJSON("data/all/stocks.json");
+  } catch (e) {
+    document.getElementById("rows").innerHTML = '<tr><td class="l">讀不到 data/all/stocks.json（排程執行後才會產生）。</td></tr>';
+    return;
+  }
+  const all = data.rows.map((r) => Object.fromEntries(data.fields.map((f, i) => [f, r[i]])));
+  const industryView = new URLSearchParams(location.search).get("view") === "industry";
+  if (industryView) document.getElementById("title").textContent = "全台股總表・依產業";
+
+  // 篩選、排序記在瀏覽器（方便用，讀不到也沒關係）
+  let st = { mk: "all", ind: "", q: "", key: "code", dir: 1 };
+  try { st = Object.assign(st, JSON.parse(localStorage.getItem("all-state") || "{}")); } catch (e) {}
+  st.q = "";
+  const save = () => { try { localStorage.setItem("all-state", JSON.stringify(Object.assign({}, st, { q: "" }))); } catch (e) {} };
+
+  // 產業選單（依家數多到少）
+  const inds = {};
+  all.forEach((s) => { inds[s.industry] = (inds[s.industry] || 0) + 1; });
+  const indSel = document.getElementById("f-ind");
+  indSel.innerHTML += Object.keys(inds).sort((a, b) => inds[b] - inds[a]).map((k) => '<option value="' + App.esc(k) + '">' + App.esc(k) + "（" + inds[k] + "）</option>").join("");
+  indSel.value = st.ind;
+  if (indSel.value !== st.ind) st.ind = "";
+
+  // 欄位標題
+  const head = document.getElementById("head");
+  head.innerHTML = COLS.map((c, i) => '<th class="sort' + (c.l ? " l" : "") + (i < 2 ? " stick s" + i : "") + '" data-k="' + c.k + '" tabindex="0">' + c.t + "</th>").join("");
+  const sortBy = (th) => {
+    if (!th) return;
+    const c = COLS.find((x) => x.k === th.dataset.k);
+    st.dir = st.key === c.k ? -st.dir : (c.asc ? 1 : -1);
+    st.key = c.k;
+    save(); render();
+  };
+  head.addEventListener("click", (e) => sortBy(e.target.closest("th")));
+  head.addEventListener("keydown", (e) => { if (e.key === "Enter") sortBy(e.target.closest("th")); });
+
+  document.querySelectorAll(".seg button[data-mk]").forEach((b) => b.addEventListener("click", () => { st.mk = b.dataset.mk; save(); render(); }));
+  indSel.addEventListener("change", () => { st.ind = indSel.value; save(); render(); });
+  let qt;
+  document.getElementById("f-q").addEventListener("input", (e) => { clearTimeout(qt); qt = setTimeout(() => { st.q = e.target.value.trim().toUpperCase(); render(); }, 150); });
+  document.getElementById("rows").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-code]");
+    if (tr) location.href = "stock.html?symbol=" + encodeURIComponent(tr.dataset.code) + "&m=tw";
+  });
+
+  function cmp(a, b) {
+    const x = a[st.key], y = b[st.key];
+    if (x == null && y == null) return a.code < b.code ? -1 : 1;
+    if (x == null) return 1;   // 空值永遠排最後
+    if (y == null) return -1;
+    const r = typeof x === "string" ? x.localeCompare(y, "zh-TW") : x - y;
+    return (r || (a.code < b.code ? -1 : 1)) * (r ? st.dir : 1);
+  }
+
+  // 一次只畫一批（約 1,900 列全部畫出來手機會卡），捲到底再畫下一批
+  const BATCH = 200;
+  let list = [], shown = 0;
+  const tbody = document.getElementById("rows"), more = document.getElementById("more");
+  const rowHtml = (s) => '<tr class="link" data-code="' + App.esc(s.code) + '">' +
+    COLS.map((c, i) => "<td" + (c.l || i < 2 ? ' class="' + (c.l ? "l" : "") + (i < 2 ? " stick s" + i : "") + '"' : "") + ">" + c.f(s) + "</td>").join("") + "</tr>";
+  function appendBatch() {
+    if (shown >= list.length) return;
+    tbody.insertAdjacentHTML("beforeend", list.slice(shown, shown + BATCH).map(rowHtml).join(""));
+    shown = Math.min(list.length, shown + BATCH);
+    more.textContent = shown < list.length ? "已顯示 " + shown + "／" + list.length + " 家，往下捲動載入更多…" : "";
+  }
+  new IntersectionObserver((es) => { if (es[0].isIntersecting) appendBatch(); }, { rootMargin: "600px" }).observe(more);
+
+  function render() {
+    document.querySelectorAll(".seg button[data-mk]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mk === st.mk)));
+    head.querySelectorAll("th").forEach((th) => {
+      if (th.dataset.k === st.key) th.setAttribute("aria-sort", st.dir > 0 ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+    });
+    list = all.filter((s) => (st.mk === "all" || s.market === st.mk) && (!st.ind || s.industry === st.ind) &&
+      (!st.q || s.code.startsWith(st.q) || s.name.toUpperCase().includes(st.q))).sort(cmp);
+    document.getElementById("count").textContent = "共 " + list.length + " 家";
+    tbody.innerHTML = list.length ? "" : '<tr><td class="l">沒有符合的股票。</td></tr>';
+    shown = 0;
+    appendBatch();
+    if (industryView) renderIndustry();
+  }
+
+  // 依產業：各產業家數、市值加權漲跌、漲跌家數、本益比與營收 YoY 中位數、總市值
+  function median(a) {
+    const v = a.filter(App.isNum).sort((x, y) => x - y);
+    if (!v.length) return null;
+    const m = v.length >> 1;
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+  function renderIndustry() {
+    document.getElementById("p-industry").hidden = false;
+    const groups = {};
+    all.filter((s) => st.mk === "all" || s.market === st.mk).forEach((s) => (groups[s.industry] = groups[s.industry] || []).push(s));
+    const rows = Object.entries(groups).map(([name, g]) => {
+      const cap = g.reduce((a, s) => a + (s.mktcap || 0), 0);
+      const w = g.filter((s) => s.mktcap && App.isNum(s.change_pct));
+      const wsum = w.reduce((a, s) => a + s.mktcap, 0);
+      return {
+        name, n: g.length, cap,
+        chg: wsum ? w.reduce((a, s) => a + s.change_pct * s.mktcap, 0) / wsum : null,
+        up: g.filter((s) => s.change_pct > 0).length, down: g.filter((s) => s.change_pct < 0).length,
+        pe: median(g.map((s) => s.pe)), yoy: median(g.map((s) => s.rev_yoy)),
+      };
+    }).sort((a, b) => b.cap - a.cap);
+    document.getElementById("t-industry").innerHTML =
+      "<thead><tr><th>產業</th><th>家數</th><th>市值加權漲跌</th><th>上漲／下跌</th><th>總市值(億)</th><th>本益比中位數</th><th>營收YoY中位數</th></tr></thead><tbody>" +
+      rows.map((r) => '<tr class="link' + (st.ind === r.name ? " cur" : "") + '" data-ind="' + App.esc(r.name) + '"><td>' + App.esc(r.name) + "</td><td>" + r.n + "</td><td>" + pctCell(r.chg) +
+        '</td><td><span class="up">' + r.up + '</span>／<span class="down">' + r.down + "</span></td><td>" + yi(r.cap) + "</td><td>" + App.fmtNum(r.pe, 1) + "</td><td>" + pctCell(r.yoy) + "</td></tr>").join("") + "</tbody>";
+  }
+  document.getElementById("t-industry").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-ind]");
+    if (!tr) return;
+    st.ind = st.ind === tr.dataset.ind ? "" : tr.dataset.ind;  // 再點一次取消
+    indSel.value = st.ind;
+    save(); render();
+    document.getElementById("wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const months = {};
+  all.forEach((s) => { if (s.rev_month) months[s.rev_month] = (months[s.rev_month] || 0) + 1; });
+  const revMonth = Object.keys(months).sort((a, b) => months[b] - months[a])[0];
+  const dates = all.map((s) => s.date).filter(Boolean).sort();
+  document.getElementById("foot").textContent =
+    "收盤 " + (dates[dates.length - 1] || "—") + "・月營收 " + (revMonth || "—") + "（官方彙總較個股公布晚幾天）・資料更新 " + data.updated +
+    "。近四季 EPS＝股價 ÷ 本益比；今年 EPS 為今年以來累計（Q 後數字為最新季別）；毛利率、營益率為今年以來累計，金融業不適用。PEG 待 EPS 歷史回補後提供。";
+  render();
+})();
+</script>
+</body>
+</html>

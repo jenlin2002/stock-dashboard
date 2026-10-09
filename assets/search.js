@@ -11,32 +11,13 @@
   const input = box.querySelector("input"), list = box.querySelector("ul");
   let results = [], active = -1;
 
-  function score(q, code, name) {
-    const c = code.toUpperCase(), n = name.toUpperCase();
-    if (c === q) return 0;
-    if (c.startsWith(q)) return 1;
-    if (n.startsWith(q)) return 2;
-    if (n.includes(q)) return 3;
-    return -1;
-  }
-
   async function update() {
-    const q = input.value.trim().toUpperCase();
+    const q = input.value.trim();
     if (!q) return close();
-    let s;
-    try { s = await App.loadStockList(); } catch (e) { return close(); }
-    if (input.value.trim().toUpperCase() !== q) return;  // 使用者又打了字
-    const out = [];
-    for (const [code, name, market, industry] of s.tw) {
-      const sc = score(q, code, name);
-      if (sc >= 0) out.push({ sc, symbol: code, name, tag: (market === "TWSE" ? "上市" : "上櫃") + (industry ? "・" + industry : ""), m: "tw" });
-    }
-    for (const [ticker, name, exch] of s.us) {
-      const sc = score(q, ticker, name);
-      if (sc >= 0) out.push({ sc, symbol: ticker, name, tag: exch, m: "us" });
-    }
-    out.sort((a, b) => a.sc - b.sc || a.symbol.length - b.symbol.length || (a.symbol < b.symbol ? -1 : 1));
-    results = out.slice(0, 10);
+    let out;
+    try { out = await App.searchStocks(q, 10); } catch (e) { return close(); }
+    if (input.value.trim() !== q) return;  // 使用者又打了字
+    results = out;
     active = results.length ? 0 : -1;
     render();
   }

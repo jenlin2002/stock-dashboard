@@ -54,6 +54,36 @@ a { color: var(--accent); }
 .topbar nav { margin-left: auto; display: flex; gap: 14px; font-size: 14px; }
 .topbar nav a { text-decoration: none; }
 
+/* ---------- 主畫面版面：左側選單＋右側內容 ---------- */
+.topbar { position: sticky; top: 0; z-index: 30; }
+.topbar nav { display: none; }   /* 頁首連結改由左側選單提供（搜尋框以它定位） */
+.menu-btn { display: none; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 6px; font-size: 18px; line-height: 1; padding: 5px 9px; cursor: pointer; }
+.layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: calc(100vh - 53px); }
+.content { min-width: 0; }
+.panel, .two-col { scroll-margin-top: 64px; }  /* 點選單細項跳到錨點時，不被固定的頁首蓋住 */
+.content > main { max-width: 1240px; }
+.sidebar { border-right: 1px solid var(--border); background: var(--card); }
+.sidebar nav { position: sticky; top: 53px; max-height: calc(100vh - 53px); overflow-y: auto; padding: 10px 8px 24px; }
+.grp { margin-bottom: 6px; }
+.grp .big { display: flex; align-items: center; gap: 8px; padding: 8px 10px; white-space: nowrap; border-radius: 8px; color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px; }
+.grp .big i { font-style: normal; width: 20px; text-align: center; }
+.grp a.big:hover { background: var(--bg); }
+.grp.on .big { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.grp .sub { display: none; padding: 5px 10px 5px 40px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 14px; }
+.grp.on .sub { display: block; }
+.grp .sub:hover { color: var(--text); background: var(--bg); }
+.grp .sub.cur { color: var(--accent); font-weight: 600; }
+.grp.off .big { color: var(--muted); font-weight: 500; cursor: default; }
+.grp.off em { margin-left: auto; font-style: normal; font-size: 11px; border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+@media (max-width: 900px) {
+  .menu-btn { display: inline-block; }
+  .layout { display: block; }
+  .sidebar { position: fixed; z-index: 40; top: 0; bottom: 0; left: 0; width: 250px; transform: translateX(-100%); transition: transform .2s; box-shadow: 0 0 24px rgba(0,0,0,.25); }
+  .sidebar nav { top: 0; max-height: 100vh; padding-top: 16px; }
+  body.menu-open .sidebar { transform: none; }
+  body.menu-open .content::before { content: ""; position: fixed; inset: 0; z-index: 35; background: rgba(0,0,0,.35); }
+}
+
 /* 頁首搜尋框 */
 .search { position: relative; flex: 0 1 280px; margin-left: auto; }
 .search input {
@@ -191,6 +221,21 @@ th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--bo
 th:first-child, td:first-child, th.l, td.l { text-align: left; }
 th { color: var(--muted); font-weight: 500; }
 tbody tr:last-child td { border-bottom: 0; }
+
+/* 全台股總表：表格自己捲動，表頭固定在上、代號名稱固定在左 */
+.content > main.wide { max-width: none; }
+.big-table { max-height: calc(100vh - 210px); overflow: auto; }
+.big-table thead th { position: sticky; top: 0; z-index: 2; background: var(--card); box-shadow: inset 0 -1px 0 var(--border); }
+.big-table .stick { position: sticky; z-index: 1; background: var(--card); }
+.big-table thead th.stick { z-index: 3; }
+.big-table .s0 { left: 0; min-width: 62px; }
+.big-table .s1 { left: 62px; box-shadow: inset -1px 0 0 var(--border); }
+.big-table tbody tr.link:hover td.stick { background: var(--bg); }
+tr.cur td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.toolbar select, .toolbar input[type="search"] {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); font: inherit; font-size: 14px;
+}
+.toolbar input[type="search"] { width: 160px; }
 
 /* 比較頁 */
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }

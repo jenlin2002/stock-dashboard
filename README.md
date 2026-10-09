@@ -145,6 +145,9 @@ config/watchlist.json        追蹤清單（唯一需要手動維護的檔案）
 data/tw/*.json, data/us/*.json  每檔股票的資料（排程產生）
 data/summary.json            首頁、比較頁用的總表（排程產生）
 data/stocklist.json          搜尋框用的全部台股、美股清單（排程產生）
+data/all/stocks.json         全台股總表（排程產生，scripts/build_all.py）
+all.html                     全台股總表頁（依股號、依產業）
+assets/layout.js             共用版面：左側選單＋右側內容
 functions/api/stock.js       Cloudflare Pages Function：即時查詢不在清單裡的股票
 scripts/                     抓資料的 Python 程式
 assets/                      網頁共用的 CSS、JavaScript（app、charts、indicators、widgets）
