@@ -11,7 +11,10 @@
 **接下來（依序）**
 1. [x] **Claude Code**：實作 Phase 1（TradingView 看盤頁），完成後停下來說明如何測試（2026-10-09 完成，見 Phase 1「實測結果」）
 2. [ ] **本人**：測試 Phase 1；確認後讓 Claude Code 把變更合併到 `main` 分支（若是 Pull Request，到 GitHub → Pull requests → Merge）
-3. [ ] **本人**：照下方「Cloudflare 設定」部署網站並加上 Access 登入保護
+3. [x] **本人**：照下方「Cloudflare 設定」部署網站並加上 Access 登入保護（2026-10-09 完成）
+   - 網址：https://stock-dashboard-2fv.pages.dev （push 到 main 會自動部署）
+   - Zero Trust 選 Free 方案；Access 應用程式「stock-dashboard - Cloudflare Pages」保護兩個網址：`stock-dashboard-2fv.pages.dev`（正式）和 `*.stock-dashboard-2fv.pages.dev`（每次部署的預覽網址）
+   - 政策：Allow／Include Emails = 本人 email；登入方式 One-time PIN。已驗證未登入時會被導到 Cloudflare Access 登入頁。
 4. [ ] **本人**：到 finmindtrade.com 註冊取得 token，存入 GitHub repo → Settings → Secrets and variables → Actions → `FINMIND_TOKEN`
 5. [ ] **Claude Code**：實作 Phase 2，之後依序 Phase 3～6
 
