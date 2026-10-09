@@ -1,0 +1,78 @@
+name: 更新股票資料
+
+on:
+  schedule:
+    # GitHub 用 UTC 時間；排程可能延遲幾分鐘到幾十分鐘
+    - cron: "0 8 * * 1-5"    # 台灣時間週一～五 16:00：台股
+    - cron: "0 22 * * 1-5"   # 台灣時間週二～六 06:00：美股（美東前一天收盤後）
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "要更新哪個市場"
+        type: choice
+        options: [all, tw, us]
+        default: all
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Asia/Taipei   # 讓 JSON 裡的 updated 日期用台灣時間
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: 安裝套件
+        run: pip install -r scripts/requirements.txt
+
+      - name: 抓台股
+        id: tw
+        if: github.event.schedule == '0 8 * * 1-5' || (github.event_name == 'workflow_dispatch' && inputs.target != 'us')
+        continue-on-error: true
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: python scripts/fetch_tw.py
+
+      - name: 抓美股
+        id: us
+        if: github.event.schedule == '0 22 * * 1-5' || (github.event_name == 'workflow_dispatch' && inputs.target != 'tw')
+        continue-on-error: true
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: python scripts/fetch_us.py
+
+      - name: 彙整 summary.json
+        run: python scripts/build_summary.py
+
+      - name: 有變更才 commit 並 push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "資料沒有變更"
+            exit 0
+          fi
+          git commit -m "自動更新資料 $(date +'%Y-%m-%d %H:%M')"
+          git pull --rebase
+          git push
+
+      # 抓取失敗時，上面仍會把成功的部分存起來；這一步讓整個 workflow 顯示紅燈並寄通知信
+      - name: 檢查抓取結果
+        if: steps.tw.outcome == 'failure' || steps.us.outcome == 'failure'
+        run: |
+          echo "有市場的抓取全部失敗，請看上面「抓台股」「抓美股」步驟的紀錄"
+          exit 1

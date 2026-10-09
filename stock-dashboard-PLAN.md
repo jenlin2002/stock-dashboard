@@ -17,10 +17,12 @@
    - 政策：Allow／Include Emails = 本人 email；登入方式 One-time PIN。已驗證未登入時會被導到 Cloudflare Access 登入頁。
 4. [x] **本人**：FinMind token 已存入 GitHub Secret `FINMIND_TOKEN`（2026-10-09）。`fetch_tw.py` 有這個環境變數就自動帶 token；本機手動執行可不設（每小時約 300 次請求，每檔台股用 5 次）。Phase 4 的 workflow 要把 Secret 傳成環境變數。
 5. [x] **Claude Code**：實作 Phase 2（2026-10-09 完成，見 Phase 2「實作結果」）
-6. [ ] **本人**：確認 Phase 2 資料，用 GitHub Desktop commit + push（可與 Phase 3 一起）
+6. [x] **本人**：確認 Phase 2 資料，用 GitHub Desktop commit + push（與 Phase 3 一起）
 7. [x] **Claude Code**：Phase 3（美股資料）（2026-10-09 完成，見 Phase 3「實作結果」）
-8. [ ] **本人**：決定 SEC 聯絡 email，存成 GitHub Secret `SEC_USER_AGENT`（格式：`stock-dashboard 你的email`）；commit + push Phase 3
-9. [ ] **Claude Code**：Phase 4（GitHub Actions 自動排程），之後 Phase 5、6
+8. [x] **本人**：SEC 聯絡 email 已存成 GitHub Secret `SEC_USER_AGENT`；Phase 2、3 已 commit + push（2026-10-09）
+9. [x] **Claude Code**：Phase 4（GitHub Actions 自動排程）（2026-10-09 完成，見 Phase 4「實作結果」）
+10. [ ] **本人**：push 後到 GitHub → Actions → 「更新股票資料」→ Run workflow 手動觸發一次，確認綠燈且出現自動 commit
+11. [ ] **Claude Code**：Phase 5（數據頁），之後 Phase 6
 
 **給 Claude Code 的規則**
 - 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
@@ -242,6 +244,14 @@ stock-dashboard/
 2. `build_summary.py`：彙整所有個股的最新指標到 `summary.json`，給首頁和比較頁使用。
 
 **驗收**：手動觸發一次 workflow 成功，repo 出現自動 commit。
+
+**實作結果（2026-10-09）**
+- `.github/workflows/update-data.yml`（名稱「更新股票資料」）：UTC 08:00 週一～五跑台股、UTC 22:00 週一～五跑美股；手動觸發可選 all／tw／us。job 設 `TZ: Asia/Taipei`，JSON 的日期用台灣時間。
+- Secrets 以環境變數傳入：`FINMIND_TOKEN`（台股）、`SEC_USER_AGENT`（美股）。
+- 抓取步驟 `continue-on-error`：某市場全部失敗時，另一市場和 summary 仍會 commit，最後一步再讓 workflow 變紅燈（GitHub 會寄通知信）。部分股票失敗只會在紀錄裡出現「[警告]」，仍是綠燈。
+- commit 前 `git pull --rebase`，避免和手動 push 衝突。每次 push 都會觸發 Cloudflare 重新部署（每月約 44 次，遠低於 500 次上限）。
+- `scripts/build_summary.py` → `data/summary.json`：依 watchlist 順序，每檔一行；欄位：symbol、name、market、exchange、updated、price_date、price、change_pct、pe、pb、dividend_yield、revenue_month、revenue_yoy（台股）、quarter、eps_ttm（近四季 EPS 合計）、gross_margin、operating_margin（最新一季，%）。
+- 已核對：股價 ÷ eps_ttm 與資料來源的本益比一致（台積電 2550 ÷ 86.28 = 29.56；Apple 340.42 ÷ 8.71 ≈ 39.04）。
 
 ---
 
