@@ -10,13 +10,15 @@
 
 **接下來（依序）**
 1. [x] **Claude Code**：實作 Phase 1（TradingView 看盤頁），完成後停下來說明如何測試（2026-10-09 完成，見 Phase 1「實測結果」）
-2. [ ] **本人**：測試 Phase 1；確認後讓 Claude Code 把變更合併到 `main` 分支（若是 Pull Request，到 GitHub → Pull requests → Merge）
+2. [x] **本人**：測試 Phase 1；確認後讓 Claude Code 把變更合併到 `main` 分支（2026-10-09 已用 GitHub Desktop push）
 3. [x] **本人**：照下方「Cloudflare 設定」部署網站並加上 Access 登入保護（2026-10-09 完成）
    - 網址：https://stock-dashboard-2fv.pages.dev （push 到 main 會自動部署）
    - Zero Trust 選 Free 方案；Access 應用程式「stock-dashboard - Cloudflare Pages」保護兩個網址：`stock-dashboard-2fv.pages.dev`（正式）和 `*.stock-dashboard-2fv.pages.dev`（每次部署的預覽網址）
    - 政策：Allow／Include Emails = 本人 email；登入方式 One-time PIN。已驗證未登入時會被導到 Cloudflare Access 登入頁。
-4. [ ] **本人**：到 finmindtrade.com 註冊取得 token，存入 GitHub repo → Settings → Secrets and variables → Actions → `FINMIND_TOKEN`
-5. [ ] **Claude Code**：實作 Phase 2，之後依序 Phase 3～6
+4. [ ] **本人**（可延後）：到 finmindtrade.com 註冊取得 token，存入 GitHub repo → Settings → Secrets and variables → Actions → `FINMIND_TOKEN`。不設 token 也能跑（每小時約 300 次請求，每檔台股用 5 次），追蹤清單變多再設。
+5. [x] **Claude Code**：實作 Phase 2（2026-10-09 完成，見 Phase 2「實作結果」）
+6. [ ] **本人**：確認 Phase 2 資料，用 GitHub Desktop commit + push
+7. [ ] **Claude Code**：Phase 3（美股資料），之後依序 Phase 4～6
 
 **給 Claude Code 的規則**
 - 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
@@ -171,6 +173,19 @@ stock-dashboard/
 - 美股沒有月營收，該欄位留空陣列。
 
 **驗收**：本機執行 `python scripts/fetch_tw.py` 後，`data/tw/` 底下有正確的 JSON。
+
+**實作結果（2026-10-09）**
+- 檔案：`scripts/fetch_tw.py`、`scripts/common.py`（共用：讀 watchlist、寫 JSON、算成長率）、`scripts/requirements.txt`。
+- 用法：`python scripts/fetch_tw.py`（整個清單）或 `python scripts/fetch_tw.py 2330`（指定代號）。2 檔第一次完整抓約 12 秒。
+- **本益比改用 FinMind `TaiwanStockPER`**（上市、上櫃都有），不用 TWSE／TPEx OpenAPI：證交所 OpenAPI 的 SSL 憑證不符合新版 Python 的檢查，會連線失敗。
+- **股價改存 OHLC＋成交量**（`open/high/low/close/volume`，volume 為股數）：上市股票 TradingView 不給 K 線，Phase 5 要用這份資料自己畫。5 年約 1,200 天，每檔 JSON 約 65KB。
+- 增量更新：股價從最後一天起補抓；月營收從最後兩個月起重抓（公司偶爾更正）。季報、股利資料量小，每次重抓 5 年。
+- 季報是**單季**數字；`net_income` 用「歸屬母公司淨利」，與 EPS 同基礎。
+- 股利依「所屬年度」加總（「114年第3季」「114年前半年度」都算 2025）；當年度只含已公布的部分。
+- 資產負債表、現金流量表暫不抓：Phase 5 的圖表用不到，需要時再加。
+- 年報連結：`https://doc.twse.com.tw/server-java/t57sb01?step=1&colorchg=1&co_id={代號}&year={民國年}&mtype=F`（公開資訊觀測站「股東會年報」清單；6 月起指向去年度）。
+- 單檔失敗（例如代號打錯、查無股價）只會警告並跳過，不寫檔；全部失敗才回傳錯誤碼。
+- 已核對：台積電 2026/9 營收 5,118.6 億、YoY +54.65%；2026Q2 EPS 27.25；2025 年度現金股利合計 22 元。
 
 ---
 
