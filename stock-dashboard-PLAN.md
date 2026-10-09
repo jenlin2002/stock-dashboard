@@ -17,8 +17,10 @@
    - 政策：Allow／Include Emails = 本人 email；登入方式 One-time PIN。已驗證未登入時會被導到 Cloudflare Access 登入頁。
 4. [x] **本人**：FinMind token 已存入 GitHub Secret `FINMIND_TOKEN`（2026-10-09）。`fetch_tw.py` 有這個環境變數就自動帶 token；本機手動執行可不設（每小時約 300 次請求，每檔台股用 5 次）。Phase 4 的 workflow 要把 Secret 傳成環境變數。
 5. [x] **Claude Code**：實作 Phase 2（2026-10-09 完成，見 Phase 2「實作結果」）
-6. [ ] **本人**：確認 Phase 2 資料，用 GitHub Desktop commit + push
-7. [ ] **Claude Code**：Phase 3（美股資料），之後依序 Phase 4～6
+6. [ ] **本人**：確認 Phase 2 資料，用 GitHub Desktop commit + push（可與 Phase 3 一起）
+7. [x] **Claude Code**：Phase 3（美股資料）（2026-10-09 完成，見 Phase 3「實作結果」）
+8. [ ] **本人**：決定 SEC 聯絡 email，存成 GitHub Secret `SEC_USER_AGENT`（格式：`stock-dashboard 你的email`）；commit + push Phase 3
+9. [ ] **Claude Code**：Phase 4（GitHub Actions 自動排程），之後 Phase 5、6
 
 **給 Claude Code 的規則**
 - 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
@@ -214,6 +216,18 @@ stock-dashboard/
 - 建議做法：先用 yfinance 上線；之後如果 yfinance 不穩定，再另外寫 `fetch_us_schwab.py` 在自己電腦上執行，或每週手動更新一次 Secret 中的 token。
 
 **驗收**：`data/us/` 底下的 JSON 財報數字與 SEC 網站上的數字一致（抽查 2～3 檔）。
+
+**實作結果（2026-10-09）**
+- 檔案：`scripts/fetch_us.py`；`requirements.txt` 加入 `yfinance`。用法：`python scripts/fetch_us.py` 或 `python scripts/fetch_us.py AAPL`。
+- **SEC 一定要 User-Agent 含 email**，否則回 403。程式讀環境變數 `SEC_USER_AGENT`（例：`stock-dashboard 你的email`），不寫在程式碼裡；GitHub Actions 用同名 Secret。
+- 營收標籤依序嘗試 `RevenueFromContractWithCustomerExcludingAssessedTax` → `Revenues` → `SalesRevenueNet` → `...IncludingAssessedTax`，同一季以前面的為準（NVIDIA 2022 年起改用 `Revenues`）。沒有 `GrossProfit` 的公司用「營收 − 營業成本」。
+- 只採用 10-Q／10-K（含 /A 更正）的數字，同一期間以最新申報為準（NVIDIA 的淨利混有 DEF 14A 的數字）。
+- 單季判斷用期間長度（80～100 天）。**第 4 季**10-K 只報全年，用「全年 − 前三季累計」推算；EPS 推算值可能差 0.01（例：Apple FY2025 Q4 推算 1.84，公布 1.85）。
+- 季報多兩個欄位：`fiscal`（財報季，例 `FY2027 Q1`）、`end`（季末日）。`period` 是對齊最近日曆季的標示（NVIDIA 4/26 結束的季 = `2026Q1`，與 SEC frame 相同），方便和台股比較。
+- 股價：yfinance、分割已調整、股利未調整，同樣存 OHLC＋成交量（股數），增量更新。Yahoo 失敗時沿用舊股價，財報照常更新。
+- 本益比 `trailingPE`、股價淨值比 `priceToBook`、殖利率用 `trailingAnnualDividendYield`×100（近 12 個月，與台股定義相同）。
+- 股利依除息日的日曆年加總。
+- 已核對：Apple FY2025 Q4 營收 102,466M（推算，與公布 102.47B 相符）；NVIDIA FY2026 Q2 營收 46,743M。
 
 ---
 
