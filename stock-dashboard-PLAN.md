@@ -1,5 +1,27 @@
 # 台美股基本面網站：執行計畫
 
+## 目前進度（交接說明，請先讀這段）
+
+**已完成**
+- [x] 在 claude.ai 完成資料來源評估與本計畫
+- [x] 建立 GitHub repo `jenlin2002/stock-dashboard`（設為 Private）
+- [x] 上傳本計畫檔到 repo 根目錄
+
+**接下來（依序）**
+1. [ ] **Claude Code**：實作 Phase 1（TradingView 看盤頁），完成後停下來說明如何測試
+2. [ ] **本人**：測試 Phase 1；確認後讓 Claude Code 把變更合併到 `main` 分支（若是 Pull Request，到 GitHub → Pull requests → Merge）
+3. [ ] **本人**：照下方「Cloudflare 設定」部署網站並加上 Access 登入保護
+4. [ ] **本人**：到 finmindtrade.com 註冊取得 token，存入 GitHub repo → Settings → Secrets and variables → Actions → `FINMIND_TOKEN`
+5. [ ] **Claude Code**：實作 Phase 2，之後依序 Phase 3～6
+
+**給 Claude Code 的規則**
+- 每完成一個 Phase 就停下來，用繁體中文告訴本人怎麼測試，等確認後再繼續。
+- 每完成一項，更新這段「目前進度」的勾選狀態並一起 commit。
+- 追蹤清單先用計畫裡的範例股票。
+- 任何 API key 都不能寫進程式碼。
+
+---
+
 > 把這份檔案放在專案根目錄，交給 Claude Code 依階段實作。
 > 每完成一個階段就先上線測試，再進行下一階段。
 
