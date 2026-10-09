@@ -15,8 +15,10 @@
     [{ k: "debt_ratio", t: "負債比（槓桿）", u: "%", better: "low" }],
     [
       { k: "pb", t: "股價淨值比", u: "x", better: "low", positive: true },
+      { k: "pcf", t: "股價現金流量比", u: "x", better: "low", positive: true },
       { k: "psr", t: "股價營收比", u: "x", better: "low", positive: true },
     ],
+    [{ k: "fcf_yield", t: "自由現金流殖利率", u: "%", better: "high" }],
   ];
   const LEVEL_TEXT = ["最弱的 20%", "後段（20～40%）", "中段（40～60%）", "前段（60～80%）", "最強的 20%"];
 
@@ -61,7 +63,7 @@
     if (!s) { host.innerHTML = '<p class="note">全台股總表沒有這檔（可能是 ETF 或剛上市）。</p>'; return false; }
     const peers = d.rows.filter((x) => x.industry === s.industry);
     const capRank = d.rows.filter((x) => App.isNum(x.mktcap)).sort((a, b) => b.mktcap - a.mktcap).findIndex((x) => x.code === code) + 1;
-    const yi = (x) => (App.isNum(x) ? App.fmtNum(x / 1e8, x >= 1e11 ? 0 : 1) + " 億" : "na");
+    const yi = (x) => (App.isNum(x) ? App.fmtNum(x / 1e8, Math.abs(x) >= 1e11 ? 0 : 1) + " 億" : "na");
 
     let html =
       '<div class="refs-card">' +
@@ -96,6 +98,9 @@
     html +=
         '<div class="refs-sec">' +
           row("每股淨值", App.isNum(s.bvps) ? App.fmtNum(s.bvps, 2) + " 元" : "na") +
+          row("每股營業現金流（近四季）", App.isNum(s.cfps) ? App.fmtNum(s.cfps, 2) + " 元" : "na") +
+          row("每股自由現金流（近四季）", App.isNum(s.fcfps) ? App.fmtNum(s.fcfps, 2) + " 元" : "na") +
+          row("自由現金流" + (s.cf_period ? "（至 " + s.cf_period + "）" : ""), yi(s.fcf_ttm)) +
           row("一年前近四季 EPS", App.isNum(s.eps_prev) ? App.fmtNum(s.eps_prev, 2) + " 元" : "na") +
         "</div>" +
       "</div>";

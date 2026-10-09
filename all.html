@@ -31,6 +31,7 @@
     <select id="f-ind" aria-label="產業"><option value="">全部產業</option></select>
     <input type="search" id="f-q" placeholder="篩選代號或名稱" aria-label="篩選代號或名稱">
     <span class="updated" id="count"></span>
+    <button type="button" class="btn export-btn" id="export">⬇ 匯出 Excel</button>
   </div>
 
   <section class="panel">
@@ -78,6 +79,9 @@
     { k: "pb", t: "淨值比", asc: true, f: (s) => App.fmtNum(s.pb, 2) },
     { k: "psr", t: "營收比", asc: true, f: (s) => App.fmtNum(s.psr, 2) },
     { k: "debt_ratio", t: "負債比", asc: true, f: (s) => App.fmtPct(s.debt_ratio) },
+    { k: "pcf", t: "現金流量比", asc: true, f: (s) => App.fmtNum(s.pcf, 2) },
+    { k: "fcf_yield", t: "FCF殖利率", f: (s) => pctCell(s.fcf_yield) },
+    { k: "fcf_ttm", t: "自由現金流(億)", f: (s) => yi(s.fcf_ttm) },
     { k: "rev", t: "月營收(億)", f: (s) => yi(s.rev) },
     { k: "rev_yoy", t: "營收YoY", f: (s) => pctCell(s.rev_yoy) },
     { k: "rev_cum_yoy", t: "累計YoY", f: (s) => pctCell(s.rev_cum_yoy) },
@@ -210,6 +214,53 @@
     document.getElementById("wrap").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
+  // ---------- 匯出 Excel：目前篩選、排序後的全部股票（不只畫面上已載入的），所有欄位 ----------
+  const r = (x, d) => (App.isNum(x) ? +x.toFixed(d == null ? 2 : d) : null);
+  const yiN = (x, d) => (App.isNum(x) ? +(x / 1e8).toFixed(d == null ? 1 : d) : null);  // 元 → 億；沒資料保持空白（不是 0）
+  const EXPORT = [
+    ["代號", (s) => s.code], ["名稱", (s) => s.name], ["產業", (s) => s.industry], ["市場", (s) => (s.market === "TWSE" ? "上市" : "上櫃")],
+    ["收盤日", (s) => s.date], ["股價", (s) => s.close], ["漲跌%", (s) => s.change_pct], ["成交量(張)", (s) => s.volume],
+    ["市值(億)", (s) => yiN(s.mktcap)], ["本益比", (s) => s.pe],
+    ["PEG", (s) => s.peg], ["PEG(推估)", (s) => s.peg_est], ["PEG說明", (s) => s.peg_note],
+    ["近四季EPS", (s) => s.eps_ttm], ["一年前近四季EPS", (s) => s.eps_prev], ["EPS成長%", (s) => s.eps_growth],
+    ["ROE%", (s) => s.roe], ["殖利率%", (s) => s.yield], ["股價淨值比", (s) => s.pb], ["每股淨值", (s) => s.bvps],
+    ["股價營收比", (s) => s.psr], ["負債比%", (s) => s.debt_ratio],
+    ["營業現金流(億,近四季)", (s) => yiN(s.cfo_ttm)], ["自由現金流(億,近四季)", (s) => yiN(s.fcf_ttm)],
+    ["股價現金流量比", (s) => s.pcf], ["自由現金流殖利率%", (s) => s.fcf_yield],
+    ["月營收月份", (s) => s.rev_month], ["月營收(億)", (s) => yiN(s.rev, 2)], ["營收YoY%", (s) => s.rev_yoy], ["營收MoM%", (s) => s.rev_mom],
+    ["累計營收YoY%", (s) => s.rev_cum_yoy], ["近12月營收(億)", (s) => yiN(s.rev_ttm)],
+    ["今年EPS", (s) => s.eps_ytd], ["今年EPS季別", (s) => s.eps_period], ["毛利率%(今年)", (s) => s.gross_margin], ["營益率%(今年)", (s) => s.op_margin],
+  ];
+  let xlsxReady = null;
+  const loadXlsx = () => xlsxReady || (xlsxReady = new Promise((ok, fail) => {
+    const sc = document.createElement("script");
+    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    sc.onload = ok;
+    sc.onerror = () => { xlsxReady = null; fail(new Error("Excel 元件載入失敗")); };
+    document.head.appendChild(sc);
+  }));
+  document.getElementById("export").addEventListener("click", async (e) => {
+    const btn = e.currentTarget, label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "產生中…";
+    try {
+      await loadXlsx();
+      const rows = [EXPORT.map((c) => c[0])].concat(list.map((s) => EXPORT.map((c) => { const v = c[1](s); return v === undefined ? null : v; })));
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = EXPORT.map((c) => ({ wch: Math.max(8, c[0].length * 2) }));
+      ws["!freeze"] = { xSplit: 2, ySplit: 1 };
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "全台股總表");
+      const tag = [st.mk === "TWSE" ? "上市" : st.mk === "TPEX" ? "上櫃" : "", st.ind, st.q].filter(Boolean).join("_");
+      XLSX.writeFile(wb, "全台股總表_" + (dates[dates.length - 1] || data.updated) + (tag ? "_" + tag : "") + ".xlsx");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+
   const months = {};
   all.forEach((s) => { if (s.rev_month) months[s.rev_month] = (months[s.rev_month] || 0) + 1; });
   const revMonth = Object.keys(months).sort((a, b) => months[b] - months[a])[0];
@@ -217,7 +268,8 @@
   document.getElementById("foot").textContent =
     "收盤 " + (dates[dates.length - 1] || "—") + "・月營收 " + (revMonth || "—") + "（官方彙總較個股公布晚幾天）・資料更新 " + data.updated +
     "。近四季 EPS＝股價 ÷ 本益比；EPS 成長＝近四季 EPS 對一年前的近四季 EPS；PEG＝本益比 ÷ EPS 成長（成長須在 0～100%）；EPS 衰退、低基期或沒有去年可比時，以「本益比 ÷ 今年累計營收成長」推估，灰字標「估」（滑鼠移上去看原因），虧損或營收也衰退則顯示原因；圓圈為全市場五分位（全滿＝最便宜的 20%）；" +
-    "ROE＝近四季 EPS ÷ 每股淨值；營收比＝市值 ÷ 近 12 個月營收；負債比＝負債 ÷ 資產；今年 EPS、毛利率、營益率為今年以來累計，金融業沒有毛利率。";
+    "ROE＝近四季 EPS ÷ 每股淨值；營收比＝市值 ÷ 近 12 個月營收；負債比＝負債 ÷ 資產；" +
+    "現金流量比＝市值 ÷ 近四季營業現金流；FCF 殖利率＝近四季自由現金流（營業現金流 − 資本支出）÷ 市值（現金流每天輪流更新一部分）；今年 EPS、毛利率、營益率為今年以來累計，金融業沒有毛利率。";
   render();
 })();
 </script>

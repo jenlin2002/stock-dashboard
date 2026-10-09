@@ -6,7 +6,9 @@ FinMind 有 token 時每小時 600 次，沒有時 300 次。
 
 現金流量表是「年初至今累計」：近四季＝今年累計＋去年全年－去年同期累計。
 輸出：{代號: {"fetched": "2026-10-10", "q": {"2026Q2": [營業現金流, 資本支出], ...}}}（元；資本支出為負數）
-用法：python scripts/fetch_cashflow.py [批次數量] [代號 ...]
+用法：python scripts/fetch_cashflow.py              （更新最久沒更新的 450 檔）
+      python scripts/fetch_cashflow.py --batch 600  （指定這次更新幾檔）
+      python scripts/fetch_cashflow.py 2330 6488    （只更新指定代號）
 """
 import json
 import os
@@ -47,8 +49,14 @@ def fetch(code):
 
 
 def main(argv):
-    batch = int(argv[0]) if argv and argv[0].isdigit() else 450
-    only = [a for a in argv if not a.isdigit()]
+    batch, only = 450, []
+    args = list(argv)
+    while args:
+        a = args.pop(0)
+        if a == "--batch" and args:
+            batch = int(args.pop(0))
+        else:
+            only.append(a)
     cache = load_json(PATH) or {}
     stocks = load_json(DATA / "all" / "stocks.json")
     if only:

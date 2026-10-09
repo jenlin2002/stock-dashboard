@@ -161,6 +161,10 @@ all.html                     全台股總表頁（依股號、依產業）
 assets/layout.js             共用版面：左側選單＋右側內容
 functions/api/stock.js       Cloudflare Pages Function：即時查詢不在清單裡的股票
 functions/api/watchlist.js   Cloudflare Pages Function：網站上「＋／×」修改 GitHub 上的追蹤清單
+functions/api/intraday.js    Cloudflare Pages Function：分鐘 K 線（Yahoo 延遲報價）
+data/all/cashflow.json       全台股現金流量快取（scripts/fetch_cashflow.py 每天輪流更新 450 檔）
+data/all/revenue_hist.json   近 13 個月月營收快取（公開資訊觀測站）
+assets/refs.js               本益成長比評分卡（REFS 五分位燈號）
 scripts/                     抓資料的 Python 程式
 assets/                      網頁共用的 CSS、JavaScript（app、charts、indicators、widgets）
 tradingview/                 TradingView 用的 Pine Script

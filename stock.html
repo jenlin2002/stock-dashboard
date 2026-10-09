@@ -36,7 +36,8 @@
         <span class="refs-dot" style="--f:25%"></span>後段
         <span class="refs-dot"></span>空心＝最弱的 20%<br>
         <span class="refs-dot na">⊕</span>沒有資料（例如虧損時沒有本益比）　<span class="refs-dot few"></span>同業少於 5 家不比較<br><br>
-        <b>越低越好</b>：本益比、PEG、負債比、股價淨值比、股價營收比。<b>越高越好</b>：殖利率、EPS 成長率、股東權益報酬率、毛利率。<br>
+        <b>越低越好</b>：本益比、PEG、負債比、股價淨值比、股價現金流量比、股價營收比。<b>越高越好</b>：殖利率、EPS 成長率、股東權益報酬率、毛利率、自由現金流殖利率。<br>
+        <b>現金流</b>：近四季營業現金流；自由現金流＝營業現金流 − 資本支出；股價現金流量比＝市值 ÷ 營業現金流；自由現金流殖利率＝自由現金流 ÷ 市值。現金流資料每天輪流更新一部分股票，財報季後約 5 天全部更新。<br>
         <b>PEG</b>＝本益比 ÷ EPS 成長率（近四季 EPS 對一年前的近四季 EPS）；小於 1 通常代表成長相對便宜。EPS 為負或衰退時不計算；成長超過 100% 多半是去年基期太低，標「基期低」也不計算。<br>
         數字都是<b>實際</b>的近四季資料（書上 REFS 用分析師預估，台股沒有免費預估資料）。毛利率、營益率是今年以來累計；金融業沒有毛利率。<br>
         滑鼠移到圓圈上可以看說明。資料每個交易日收盤後更新。
@@ -45,17 +46,19 @@
   </section>
 
   <section class="panel" id="p-kline">
-    <h3>K 線（日）</h3>
+    <h3 id="k-title">K 線（日）</h3>
+    <div class="tf-tabs" id="tf-tabs" role="tablist" aria-label="K 線週期" hidden></div>
     <div class="kctl" id="kctl" hidden></div>
     <div class="klegend" id="klegend"></div>
     <div class="body chart-body" id="w-chart"></div>
     <div class="body sub-body" id="w-sub" hidden></div>
     <div class="table-wrap" id="t-deduct"></div>
     <p class="note" id="kline-note" hidden>
-      每日收盤資料（台股 FinMind、美股 Yahoo Finance），紅漲綠跌，可拖曳、滾輪縮放；盤中走勢請按上方「在 TradingView 開啟」。<br>
+      日線：每日收盤資料（台股 FinMind、美股 Yahoo Finance）；週線、月線由日線合併；分鐘線：Yahoo Finance 延遲報價（1 分鐘最近 5 天、5～30 分鐘最近 60 天、60 分鐘最近 1 年）。紅漲綠跌，可拖曳、滾輪縮放。<br>
+      均線、扣抵、DMI 等指標都以「根」計算：在 5 分線上 MA8 就是 8 根 5 分 K 的平均。<br>
       <b>扣抵（動態）</b>：游標指到哪一天，就以那天為基準標出扣抵 K 棒（箭頭）與扣抵價（虛線），下表也跟著換；沒有指著時以最新一天為準。
-      N 日均線下一日會扣掉 N 天前那根 K 棒的收盤價（扣抵值）：下一日收盤高於扣抵值，均線上揚；低於則下彎。均量同理（看成交量）。
-      「接下來 5 日」：扣抵值多數低於現值為<b>扣低</b>（容易續揚），多數高於現值為<b>扣高</b>（容易轉弱）。
+      N 根均線下一根會扣掉 N 根前那根 K 棒的收盤價（扣抵值）：下一根收盤高於扣抵值，均線上揚；低於則下彎。均量同理（看成交量）。
+      「接下來 5 根」：扣抵值多數低於現值為<b>扣低</b>（容易續揚），多數高於現值為<b>扣高</b>（容易轉弱）。
       DMI：紅線 +DI、綠線 −DI、藍線 ADX（點線為 25，高於 25 表示趨勢明確）。
     </p>
   </section>
@@ -183,6 +186,29 @@
   if (!SUBS.includes(opts.sub)) opts.sub = "dmi";
   function saveOpts() { try { localStorage.setItem("kline-opts-v2", JSON.stringify(opts)); } catch (e) {} }
 
+  // ---------- K 線週期：1、5、15、30、60 分（盤中，Yahoo）／日／週／月（由日線合併） ----------
+  const TFS = [["1", "1分"], ["5", "5分"], ["15", "15分"], ["30", "30分"], ["60", "60分"], ["D", "日"], ["W", "週"], ["M", "月"]];
+  if (!TFS.some(([k]) => k === opts.tf)) opts.tf = "D";
+  const tfName = (tf) => TFS.find(([k]) => k === tf)[1];
+  const tfCache = {};  // 每個週期只抓一次
+  async function seriesFor(tf) {
+    if (tf === "D") return d.price;
+    if (tf === "W" || tf === "M") return (tfCache[tf] = tfCache[tf] || Charts.aggregate(d.price, tf));
+    if (!tfCache[tf]) tfCache[tf] = App.loadIntraday(item, tf).then((x) => x.price).catch((e) => { delete tfCache[tf]; throw e; });
+    return tfCache[tf];
+  }
+  const tabs = document.getElementById("tf-tabs");
+  tabs.innerHTML = '<span class="seg">' + TFS.map(([k, t]) => '<button type="button" role="tab" data-tf="' + k + '" aria-selected="' + (opts.tf === k) + '" aria-pressed="' + (opts.tf === k) + '">' + t + "</button>").join("") + "</span>";
+  tabs.hidden = false;
+  tabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tf]");
+    if (!b || b.dataset.tf === opts.tf) return;
+    opts.tf = b.dataset.tf;
+    tabs.querySelectorAll("button").forEach((x) => { const on = x === b; x.setAttribute("aria-pressed", String(on)); x.setAttribute("aria-selected", String(on)); });
+    saveOpts();
+    drawKline();
+  });
+
   const kctl = document.getElementById("kctl");
   kctl.innerHTML =
     MAS.map((x) => '<label><input type="checkbox" data-ma="' + x + '"' + (opts.ma.includes(x) ? " checked" : "") + '><i style="background:' + Charts.MA_COLORS[x] + '"></i>MA' + x + "</label>").join("") +
@@ -207,15 +233,28 @@
     drawCharts();
   });
 
-  function drawKline() {
-    if (!d.price.dates.length) return;
+  let drawSeq = 0, kp = d.price;  // kp：目前畫的週期資料（扣抵表也用它）
+  async function drawKline() {
+    const seq = ++drawSeq, tf = opts.tf;
+    document.getElementById("k-title").textContent = "K 線（" + tfName(tf) + "）";
+    const lg = document.getElementById("klegend");
+    let p;
+    try {
+      if (tf !== "D" && tf !== "W" && tf !== "M") lg.innerHTML = '<span>讀取 ' + tfName(tf) + "線…</span>";
+      p = await seriesFor(tf);
+    } catch (err) {
+      if (seq === drawSeq) lg.innerHTML = '<span class="down">' + App.esc(err.message) + "</span>";
+      return;
+    }
+    if (seq !== drawSeq || !p.dates.length) return;  // 期間又切換了其他週期
+    Charts.destroyKlines();
+    kp = p;
     deductShown = -1;
-    const k = Charts.kline(document.getElementById("w-chart"), document.getElementById("w-sub"), d, opts);
-    const p = d.price, lg = document.getElementById("klegend");
+    const k = Charts.kline(document.getElementById("w-chart"), document.getElementById("w-sub"), { market: d.market, price: p }, opts);
     const vfmt = (x, dg) => (App.isNum(x) ? App.fmtNum(x, dg == null ? 2 : dg) : "—");
     k.onCrosshair((i) => {
       const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
-      let html = "<span>" + p.dates[i] + "</span>" +
+      let html = "<span>" + Charts.timeLabel(p.dates[i]) + "</span>" +
         "<span>開 " + App.fmtPrice(p.open[i]) + " 高 " + App.fmtPrice(p.high[i]) + " 低 " + App.fmtPrice(p.low[i]) +
         ' 收 <b class="' + App.upDown(chg) + '">' + App.fmtPrice(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
       html += opts.ma.map((x) => '<span style="color:' + Charts.MA_COLORS[x] + '">MA' + x + " " + vfmt(k.values["MA" + x][i]) + "</span>").join("");
@@ -238,7 +277,7 @@
     if (!opts.deduct) { el.innerHTML = ""; deductShown = -1; return; }
     if (t === deductShown) return;
     deductShown = t;
-    const close = d.price.close, last = close[t], lastVol = volArr[t];
+    const close = kp.close, last = close[t], lastVol = volArr[t];
     const trendCell = (r, fmt) => '<td><b class="' + (r.trend === "扣低" ? "up" : r.trend === "扣高" ? "down" : "") + '">' + r.trend + '</b> <span class="updated">' + r.next5.map(fmt).join("、") + "</span></td>";
     const priceRows = opts.ma.map((x) => Ind.deduction(close, x, t)).filter(Boolean).map((r) =>
       '<tr><td><i class="dot" style="background:' + Charts.MA_COLORS[r.n] + '"></i>MA' + r.n + "</td>" +
@@ -256,7 +295,7 @@
       "<td>量" + (r.dir >= 0 ? "低於 " : "高於 ") + vf(r.value) + "</td>" +
       trendCell(r, vf) + "</tr>");
     if (!priceRows.length && !volRows.length) { el.innerHTML = ""; return; }
-    el.innerHTML = '<table><thead><tr><th>以 ' + d.price.dates[t] + ' 為基準</th><th>目前值</th><th>下一日扣抵值</th><th>下一日方向（收盤／量不變）</th><th>轉向門檻</th><th>接下來 5 日扣抵</th></tr></thead><tbody>' +
+    el.innerHTML = '<table><thead><tr><th>以 ' + Charts.timeLabel(kp.dates[t]) + ' 為基準（' + tfName(opts.tf) + '線）</th><th>目前值</th><th>下一根扣抵值</th><th>下一根方向（收盤／量不變）</th><th>轉向門檻</th><th>接下來 5 根扣抵</th></tr></thead><tbody>' +
       priceRows.join("") + volRows.join("") + "</tbody></table>";
   }
 

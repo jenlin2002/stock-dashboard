@@ -10,11 +10,15 @@
     return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")";
   }
 
+  function destroyKlines() {
+    klines.forEach((c) => c.remove());
+    klines = [];
+  }
+
   function destroyAll() {
     chartjs.forEach((c) => c.destroy());
-    klines.forEach((c) => c.remove());
     chartjs = [];
-    klines = [];
+    destroyKlines();
   }
 
   // ---------- K 線＋技術指標（所有股票都用自己的日 K 資料） ----------
@@ -52,12 +56,15 @@
 
   // opts：{ ma: [5, 20, 60], deduct: true, sub: "kd" | "macd" | "none" }
   // 回傳 { legend(i) } 讓頁面顯示游標所在那天的數值
+  // 日 K 的 dates 是 "YYYY-MM-DD"；分鐘 K 是時間戳（秒，已換成交易所當地時間），要顯示時、分
   function kline(host, subHost, d, opts) {
     const p = d.price, n = p.dates.length;
     const up = v("--up"), down = v("--down");
+    const intraday = typeof p.dates[0] === "number";
+    const tsOpt = intraday ? { timeScale: { borderColor: v("--border"), timeVisible: true, secondsVisible: false } } : {};
     host.innerHTML = "";
     subHost.innerHTML = "";
-    const chart = LightweightCharts.createChart(host, chartOptions());
+    const chart = LightweightCharts.createChart(host, chartOptions(tsOpt));
     klines.push(chart);
 
     const candle = chart.addCandlestickSeries({
@@ -115,7 +122,7 @@
     let sub = null;
     subHost.hidden = opts.sub === "none";
     if (opts.sub === "dmi") {
-      sub = LightweightCharts.createChart(subHost, chartOptions());
+      sub = LightweightCharts.createChart(subHost, chartOptions(tsOpt));
       const r = Ind.dmi(p.high, p.low, p.close, DMI_N, DMI_N);
       line(sub, up, { lineWidth: 2 }).setData(series(p.dates, r.plus));
       line(sub, down, { lineWidth: 2 }).setData(series(p.dates, r.minus));
@@ -124,7 +131,7 @@
       adx.createPriceLine({ price: 25, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
       values.PDI = r.plus; values.MDI = r.minus; values.ADX = r.adx;
     } else if (opts.sub === "kd") {
-      sub = LightweightCharts.createChart(subHost, chartOptions());
+      sub = LightweightCharts.createChart(subHost, chartOptions(tsOpt));
       const r = Ind.kd(p.high, p.low, p.close, 9, 3, 3);
       const k = line(sub, SUB_COLORS[0], { lineWidth: 2 });
       k.setData(series(p.dates, r.K));
@@ -133,7 +140,7 @@
       k.createPriceLine({ price: 20, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
       values.K = r.K; values.D = r.D;
     } else if (opts.sub === "macd") {
-      sub = LightweightCharts.createChart(subHost, chartOptions());
+      sub = LightweightCharts.createChart(subHost, chartOptions(tsOpt));
       const r = Ind.macd(p.close, 12, 26, 9);
       sub.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false })
         .setData(p.dates.map((t, i) => (r.osc[i] == null ? { time: t } : { time: t, value: +r.osc[i].toFixed(3), color: rgba(r.osc[i] >= 0 ? up : down, 0.6) })));
@@ -279,5 +286,39 @@
     });
   }
 
-  window.Charts = { kline, revenue, quarterly, eps, destroyAll, quarterLabel, MAS, MA_COLORS, VOL_MA, VOL_COLORS, SUB_COLORS, DMI_N };
+  // 日 K 合併成週 K（W，週一開始）或月 K（M）；時間用該週／月第一個交易日
+  function aggregate(p, unit) {
+    const out = { dates: [], open: [], high: [], low: [], close: [], volume: [] };
+    let key = null;
+    p.dates.forEach((dt, i) => {
+      let k;
+      if (unit === "M") k = dt.slice(0, 7);
+      else {
+        const t = new Date(dt + "T00:00:00Z");
+        t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));  // 該週週一
+        k = t.toISOString().slice(0, 10);
+      }
+      const j = out.dates.length - 1;
+      if (k !== key) {
+        key = k;
+        out.dates.push(dt); out.open.push(p.open[i]); out.high.push(p.high[i]);
+        out.low.push(p.low[i]); out.close.push(p.close[i]); out.volume.push(p.volume[i]);
+      } else {
+        out.high[j] = Math.max(out.high[j], p.high[i]);
+        out.low[j] = Math.min(out.low[j], p.low[i]);
+        out.close[j] = p.close[i];
+        out.volume[j] += p.volume[i];
+      }
+    });
+    return out;
+  }
+
+  // 圖例、表格用的時間文字：日 K 原樣；分鐘 K 顯示「10-08 13:25」
+  function timeLabel(t) {
+    if (typeof t !== "number") return t;
+    return new Date(t * 1000).toISOString().slice(5, 16).replace("T", " ");
+  }
+
+  window.Charts = {
+    aggregate, timeLabel, destroyKlines, kline, revenue, quarterly, eps, destroyAll, quarterLabel, MAS, MA_COLORS, VOL_MA, VOL_COLORS, SUB_COLORS, DMI_N };
 })();

@@ -40,6 +40,9 @@ FIELDS = [
     "roe",                                                     # 近四季 EPS ÷ 每股淨值 %
     "debt_ratio", "bvps",                                      # 負債比 %（負債÷資產）、每股淨值
     "rev_ttm", "psr",                                          # 近 12 個月營收（元）、股價營收比＝市值 ÷ 近 12 個月營收
+    # 現金流量（scripts/fetch_cashflow.py 輪流更新的快取）
+    "cf_period", "cfo_ttm", "capex_ttm", "fcf_ttm",            # 近四季營業現金流、資本支出（負數）、自由現金流（元）
+    "pcf", "fcf_yield", "cfps", "fcfps",                       # 股價現金流量比、自由現金流殖利率 %、每股營業／自由現金流
 ]
 
 session = requests.Session()
@@ -215,6 +218,24 @@ def main():
             # 成長超過 100% 多半是去年 EPS 太低（低基期），PEG 會失真，不計算
             if pe and 0 < s["eps_growth"] <= 100:
                 s["peg"] = r2(pe / s["eps_growth"])
+    # ---- 現金流量（近四季）----
+    from fetch_cashflow import ttm as cf_ttm
+    cf_cache = load_json(DATA / "all" / "cashflow.json") or {}
+    for code, s in stocks.items():
+        t = cf_ttm((cf_cache.get(code) or {}).get("q"))
+        if not t:
+            continue
+        cfo, capex, period = t
+        fcf = cfo + capex
+        sh, cap = s.get("_shares"), s.get("mktcap")
+        s.update(cf_period=period, cfo_ttm=int(cfo), capex_ttm=int(capex), fcf_ttm=int(fcf))
+        if cap:
+            s["pcf"] = r2(cap / cfo) if cfo > 0 else None
+            s["fcf_yield"] = r2(fcf / cap * 100)
+        if sh:
+            s["cfps"], s["fcfps"] = r2(cfo / sh), r2(fcf / sh)
+    log(f"現金流量：{sum(1 for s in stocks.values() if s.get('cf_period'))} 家有近四季資料（快取 {len(cf_cache)} 家）")
+
     # 推估 PEG：有獲利（有本益比）但 EPS 成長不能用時（衰退、低基期、沒有去年同季可比），
     # 改用今年累計營收成長率推估（標示「估」）；推不出來就記原因，網頁顯示原因而不是空白
     for s in stocks.values():
@@ -243,26 +264,31 @@ def main():
             s["roe"] = r2(s["eps_ttm"] / s["bvps"] * 100)
 
     # ---- 月營收歷史：近 12 個月營收、股價營收比；最新月份比 OpenAPI 新就用它 ----
-    rh = fundamentals.revenue_history(12)
+    # 留 13 個月：每月 10 日前還有公司沒公布最新月份，這些公司改用前 12 個月
+    rh = fundamentals.revenue_history(13)
     months = sorted(rh)
     if months:
-        last = months[-1]
         for code, s in stocks.items():
-            vals = [rh[m].get(code) for m in months]
-            if len(months) == 12 and all(vals):
-                s["rev_ttm"] = int(sum(v[0] for v in vals) * 1000)  # 千元 → 元
+            have = [m for m in months if rh[m].get(code)]
+            if not have:
+                continue
+            last = have[-1]                       # 這家公司最新公布的月份
+            i = months.index(last)
+            window = months[max(0, i - 11): i + 1]
+            if len(window) == 12 and all(rh[m].get(code) for m in window):
+                s["rev_ttm"] = int(sum(rh[m][code][0] for m in window) * 1000)  # 千元 → 元
                 if s.get("mktcap") and s["rev_ttm"] > 0:
                     s["psr"] = r2(s["mktcap"] / s["rev_ttm"])
-            cur = rh[last].get(code)
-            if cur and (s.get("rev_month") or "") < last:
-                prev_m = rh[months[-2]].get(code) if len(months) > 1 else None
+            cur = rh[last][code]
+            if (s.get("rev_month") or "") < last:  # 比 OpenAPI 新才覆蓋
+                prev_m = rh[months[i - 1]].get(code) if i > 0 else None
                 s.update(
                     rev_month=last, rev=int(cur[0] * 1000),
                     rev_yoy=r2((cur[0] / cur[1] - 1) * 100) if cur[1] else None,
                     rev_mom=r2((cur[0] / prev_m[0] - 1) * 100) if prev_m and prev_m[0] else None,
                     rev_cum_yoy=r2((cur[2] / cur[3] - 1) * 100) if cur[2] and cur[3] else None,
                 )
-        log(f"月營收歷史：{months[0]}～{last}")
+        log(f"月營收歷史：{months[0]}～{months[-1]}（最新月份已公布 {len(rh[months[-1]])} 家）")
 
     rows =[[s.get(f) for f in FIELDS] for s in sorted(stocks.values(), key=lambda s: s["code"])]
     out = {"updated": today_str(), "fields": FIELDS, "rows": rows}

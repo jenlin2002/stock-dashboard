@@ -57,6 +57,15 @@
     return body;
   }
 
+  // 盤中 K 線（1、5、15、30、60 分）：functions/api/intraday.js 轉抓 Yahoo（延遲報價）
+  async function loadIntraday(item, tf) {
+    const q = new URLSearchParams({ market: marketOf(item), symbol: symbolOf(item), tf: String(tf), exchange: item.code ? (item.market || "TWSE") : (item.exchange || "") });
+    const res = await fetch("api/intraday?" + q);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "盤中資料讀取失敗（" + res.status + "）");
+    return body;
+  }
+
   // 全部台股、美股的代號清單（搜尋框用，約 500KB，只載入一次）
   let stockListPromise = null;
   function loadStockList() {
@@ -168,7 +177,7 @@
   }
 
   window.App = {
-    loadJSON, loadWatchlist, editWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadStockList, lookupStock, searchStocks,
+    loadJSON, loadWatchlist, editWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadIntraday, loadStockList, lookupStock, searchStocks,
     isNum, fmtNum, fmtPrice, fmtRevenue, revenueUnit, fmtPct, upDown, cssVar, onThemeChange, isDark, setTheme, esc,
   };
 })();
