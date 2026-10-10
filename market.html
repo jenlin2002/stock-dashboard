@@ -16,10 +16,12 @@
 
 <main class="wide">
   <div class="toolbar">
-    <div class="seg mk-tabs" role="tablist" aria-label="市場">
-      <button type="button" role="tab" data-mk="tw">台股大盤</button>
-      <button type="button" role="tab" data-mk="us">美股大盤</button>
+    <!-- 台股／美股大盤由左側選單切換（#tw、#us）；這裡切換 K 線圖／熱力圖 -->
+    <div class="seg" role="tablist" aria-label="圖表" id="pv-tabs">
+      <button type="button" role="tab" data-pv="k">K 線圖</button>
+      <button type="button" role="tab" data-pv="heat">熱力圖</button>
     </div>
+    <span class="view-title" id="mk-title"></span>
     <span class="updated" id="asof"></span>
   </div>
 
@@ -509,6 +511,7 @@
       const h = a.getAttribute("href");
       if (/#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + mk));
     });
+    document.getElementById("mk-title").textContent = mk === "tw" ? "台股大盤" : "美股大盤";
     document.getElementById("asof").textContent = mk === "tw" ? "台股資料 " + ((m.taiex && m.taiex.dates.slice(-1)[0]) || "—") + "（每個交易日收盤後更新）" : "Yahoo Finance 延遲報價";
     try { localStorage.setItem("market-tab", mk); } catch (e) {}
     drawHeat(mk);
@@ -517,6 +520,22 @@
   }
   tabBtns.forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.mk); showTab(b.dataset.mk); }));
   window.addEventListener("hashchange", () => { if (/^#(tw|us)$/.test(location.hash)) showTab(location.hash.slice(1)); });
+
+  // K 線圖／熱力圖 二選一（台股、美股共用，記在瀏覽器）
+  let pv = "k";
+  try { pv = localStorage.getItem("market-pv") === "heat" ? "heat" : "k"; } catch (e) {}
+  const kPanels = [document.getElementById("p-k"), document.getElementById("us-chart").closest("section.panel")];
+  const heatPanels = [document.getElementById("p-heat-tw"), document.getElementById("p-heat-us")];
+  function setPv(v) {
+    pv = v;
+    document.querySelectorAll("#pv-tabs button").forEach((b) => { const on = b.dataset.pv === v; b.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-selected", String(on)); });
+    kPanels.forEach((p) => { p.hidden = v !== "k"; });
+    heatPanels.forEach((p) => { p.hidden = v !== "heat"; });
+    try { localStorage.setItem("market-pv", v); } catch (e) {}
+    if (v === "heat" && current) drawHeat(current);  // 藏起來時量不到大小，顯示後重畫
+  }
+  document.getElementById("pv-tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-pv]"); if (b && b.dataset.pv !== pv) setPv(b.dataset.pv); });
+  setPv(pv);
   App.onThemeChange(() => { drawTwCharts(); drawK(current); });
 
   // 台股盤中即時：每 10 秒抓加權、櫃買報價（＋目前看的分鐘線）。看美股分頁時不抓。
