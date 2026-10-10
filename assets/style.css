@@ -235,6 +235,45 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 .pick-list .empty { color: var(--muted); padding: 8px 10px; font-size: 14px; }
 .dlg-foot { display: flex; justify-content: flex-end; margin-top: 10px; }
 
+/* 我的追蹤：顯示方式按鈕與三種版面 */
+.view-btns { margin-left: auto; }
+.view-btns button { display: inline-flex; align-items: center; padding: 6px 10px; }
+.view-btns svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* 小方塊：一排更多檔，走勢圖變矮 */
+.grid.view-small { grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 10px; }
+.grid.view-small .card-head { padding: 8px 10px 0; }
+.grid.view-small .card-head strong { font-size: 14px; }
+.grid.view-small .card .mini { height: 120px; }
+.grid.view-small .own-mini { padding: 4px 10px 8px; }
+.grid.view-small .own-mini .px { font-size: 19px; }
+.grid.view-small .own-mini .chg { font-size: 13px; }
+.grid.view-small .own-mini .sub { font-size: 11px; }
+.grid.view-small .add-card { min-height: 150px; }
+.grid.view-small .add-card .plus { font-size: 32px; }
+
+/* 清單：一檔一列 */
+.grid.view-list { grid-template-columns: 1fr; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--card); }
+.grid.view-list .card { display: flex; align-items: center; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; }
+.grid.view-list .card:hover { background: var(--bg); }
+.grid.view-list .card-head { flex: 0 0 210px; padding: 10px 14px; justify-content: flex-start; gap: 10px; }
+.grid.view-list .card .mini { flex: 1; height: 54px; min-width: 0; }
+.grid.view-list .own-mini { flex-direction: row; align-items: center; gap: 20px; padding: 6px 52px 6px 0; }
+.grid.view-list .own-mini > div:first-child { min-width: 190px; }
+.grid.view-list .own-mini .px { font-size: 19px; }
+.grid.view-list .own-mini svg { flex: 0 1 220px; height: 36px; margin: 0 0 0 auto; }
+.grid.view-list .rm { top: 50%; transform: translateY(-50%); right: 12px; }
+.grid.view-list .add-card { min-height: 50px; flex-direction: row; border: 0; border-radius: 0; }
+.grid.view-list .add-card .plus { font-size: 22px; }
+@media (max-width: 760px) {
+  .grid.view-list .card-head { flex-basis: 120px; flex-direction: column; gap: 0; }
+  .grid.view-list .own-mini { gap: 10px; padding-right: 44px; }
+  .grid.view-list .own-mini > div:first-child { min-width: 0; display: flex; flex-direction: column; white-space: nowrap; line-height: 1.25; }
+  .grid.view-list .own-mini .chg { margin-left: 0; font-size: 13px; }
+  .grid.view-list .own-mini .sub { display: none; }
+  .grid.view-list .own-mini svg { flex-basis: 80px; }
+}
+
 /* 首頁：上市股票用自己的資料畫的小卡 */
 .own-mini { display: flex; flex-direction: column; height: 100%; padding: 8px 14px 10px; }
 .own-mini .px { font-size: 26px; font-weight: 600; }

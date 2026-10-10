@@ -21,6 +21,17 @@
       <button type="button" role="tab" data-mk="tw">台股</button>
       <button type="button" role="tab" data-mk="us">美股</button>
     </div>
+    <div class="seg view-btns" role="group" aria-label="顯示方式">
+      <button type="button" data-view="small" title="小方塊" aria-label="小方塊">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="4" height="4"/><rect x="6" y="1" width="4" height="4"/><rect x="11" y="1" width="4" height="4"/><rect x="1" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/><rect x="11" y="6" width="4" height="4"/><rect x="1" y="11" width="4" height="4"/><rect x="6" y="11" width="4" height="4"/><rect x="11" y="11" width="4" height="4"/></svg>
+      </button>
+      <button type="button" data-view="large" title="大方塊" aria-label="大方塊">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="6.5" height="6.5"/><rect x="8.5" y="1" width="6.5" height="6.5"/><rect x="1" y="8.5" width="6.5" height="6.5"/><rect x="8.5" y="8.5" width="6.5" height="6.5"/></svg>
+      </button>
+      <button type="button" data-view="list" title="清單" aria-label="清單">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="14" height="2.4"/><rect x="1" y="6.8" width="14" height="2.4"/><rect x="1" y="11.6" width="14" height="2.4"/></svg>
+      </button>
+    </div>
   </div>
   <div class="grid" id="tw" role="tabpanel"></div>
   <div class="grid" id="us" role="tabpanel" hidden></div>
@@ -199,6 +210,22 @@
   }
   tabBtns.forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.mk); showTab(b.dataset.mk); }));
   window.addEventListener("hashchange", () => { if (/^#(tw|us)$/.test(location.hash)) showTab(location.hash.slice(1)); });
+  // 顯示方式：小方塊／大方塊／清單（記在瀏覽器，兩個分頁一起套用）
+  const viewBtns = document.querySelectorAll(".view-btns button");
+  function setView(v) {
+    ["tw", "us"].forEach((id) => {
+      const g = document.getElementById(id);
+      g.classList.remove("view-small", "view-large", "view-list");
+      g.classList.add("view-" + v);
+    });
+    viewBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+    try { localStorage.setItem("watch-view", v); } catch (e) {}
+  }
+  viewBtns.forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+  let view = "large";
+  try { view = localStorage.getItem("watch-view") || "large"; } catch (e) {}
+  setView(["small", "large", "list"].includes(view) ? view : "large");
+
   let first = /^#(tw|us)$/.test(location.hash) ? location.hash.slice(1) : null;
   if (!first) { try { first = localStorage.getItem("watch-tab"); } catch (e) {} }
   showTab(first === "us" ? "us" : "tw");
