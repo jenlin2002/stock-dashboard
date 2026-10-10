@@ -6,6 +6,7 @@
   ],
   "us": [
     { "ticker": "AAPL", "name": "Apple", "exchange": "NASDAQ" },
-    { "ticker": "NVDA", "name": "NVIDIA", "exchange": "NASDAQ" }
+    { "ticker": "NVDA", "name": "NVIDIA", "exchange": "NASDAQ" },
+    { "ticker": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ" }
   ]
 }
