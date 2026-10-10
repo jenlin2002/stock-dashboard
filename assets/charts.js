@@ -324,6 +324,37 @@
       "</select></label>").join("") + "</span>";
   }
 
+  // ---------- K 線區塊全螢幕：右上角按鈕，Esc 或再按一次離開 ----------
+  // 瀏覽器不支援元素全螢幕（例如 iPhone Safari）時，改成蓋滿視窗的版面
+  const FS_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+  const FS_EXIT = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>';
+  function fullscreenButton(panel) {
+    panel.classList.add("kfs");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fs-btn";
+    panel.appendChild(btn);
+    const isOn = () => document.fullscreenElement === panel || panel.classList.contains("fs-fallback");
+    const sync = () => {
+      const on = isOn();
+      btn.innerHTML = on ? FS_EXIT : FS_ICON;
+      btn.title = on ? "離開全螢幕（Esc）" : "全螢幕";
+      btn.setAttribute("aria-label", btn.title);
+      btn.setAttribute("aria-pressed", String(on));
+      document.body.classList.toggle("fs-lock", panel.classList.contains("fs-fallback"));
+    };
+    btn.addEventListener("click", () => {
+      if (document.fullscreenElement === panel) document.exitFullscreen();
+      else if (panel.classList.contains("fs-fallback")) panel.classList.remove("fs-fallback");
+      else if (panel.requestFullscreen) panel.requestFullscreen().catch(() => panel.classList.add("fs-fallback")).then(sync);
+      else panel.classList.add("fs-fallback");
+      sync();
+    });
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && panel.classList.contains("fs-fallback")) { panel.classList.remove("fs-fallback"); sync(); } });
+    sync();
+  }
+
   // ---------- 價／量／副圖三格的高度：格與格之間的拖拉條，高度記在瀏覽器 ----------
   // panes：[{ el, key, def, min }]，每格下方加一條拖拉條，往下拉變高、往上拉變矮
   function initPanes(storeKey, panes) {
@@ -508,5 +539,5 @@
 
   window.Charts = {
     aggregate, timeLabel, destroyKlines, kline, revenue, quarterly, eps, destroyAll, quarterLabel,
-    maSettings, saveMaSettings, DEFAULT_MA, initPanes, SUB_COLORS, DMI_N, SUB_TYPES, subsOf, subSelectsHtml };
+    maSettings, saveMaSettings, DEFAULT_MA, initPanes, fullscreenButton, SUB_COLORS, DMI_N, SUB_TYPES, subsOf, subSelectsHtml };
 })();

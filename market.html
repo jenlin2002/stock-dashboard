@@ -109,6 +109,7 @@
   kopts.subs = Charts.subsOf(kopts);  // ["vol", 副圖一, 副圖二]
   delete kopts.sub;
   const subHosts = (mk) => [1, 2, 3].map((i) => document.getElementById(mk + "-sub" + i));
+  ["tw", "us"].forEach((mk) => Charts.fullscreenButton(document.getElementById(mk + "-chart").closest("section.panel")));
   // 台股盤中即時（富果）：加權 IX0001、櫃買 IX0043
   const FUGLE = { TWII: "IX0001", OTC: "IX0043" }, DAY = { TWII: "taiex", OTC: "otc" };
   const liveDaily = {}, liveQ = {}, liveMin = {};  // liveDaily.taiex：日線（元）加上今天；liveMin["TWII:5"]：今天的分鐘 K

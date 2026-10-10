@@ -193,6 +193,7 @@
   opts.subs = Charts.subsOf(opts);
   delete opts.sub;
   const wChart = document.getElementById("w-chart");
+  Charts.fullscreenButton(document.getElementById("p-kline"));
   const wSubs = [1, 2, 3].map((i) => document.getElementById("w-sub" + i));
   Charts.initPanes("pane-h-stock3", [
     { el: wChart, key: "price", def: 400, min: 150 },

@@ -302,6 +302,21 @@ tr.busy { opacity: .4; pointer-events: none; }
 .pane-resizer:hover::after, .pane-resizer.dragging::after, .pane-resizer:focus-visible::after { background: var(--accent); }
 .kpane[hidden] + .pane-resizer { display: none; }
 
+/* K 線全螢幕 */
+.panel.kfs { position: relative; }
+.fs-btn { position: absolute; top: 10px; right: 12px; z-index: 3; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--muted); cursor: pointer; }
+.fs-btn:hover, .fs-btn:focus-visible { color: var(--accent); border-color: var(--accent); }
+.fs-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.panel.kfs:fullscreen, .panel.kfs.fs-fallback { display: flex; flex-direction: column; margin: 0; padding: 12px 16px; border-radius: 0; background: var(--card); overflow: auto; }
+.panel.kfs.fs-fallback { position: fixed; inset: 0; z-index: 1000; }
+.panel.kfs:fullscreen > *, .panel.kfs.fs-fallback > * { flex-shrink: 0; }  /* 週期列、工具列不被擠扁，只有 K 線那格伸縮 */
+.panel.kfs:fullscreen .chart-body, .panel.kfs.fs-fallback .chart-body { flex: 1 1 auto; height: auto !important; min-height: 240px; }
+.panel.kfs:fullscreen .sub-body, .panel.kfs.fs-fallback .sub-body { flex: none; }
+.panel.kfs:fullscreen > .note, .panel.kfs:fullscreen > .table-wrap,
+.panel.kfs.fs-fallback > .note, .panel.kfs.fs-fallback > .table-wrap { display: none; }
+body.fs-lock { overflow: hidden; }
+
 /* 副圖一、副圖二選單 */
 .sub-sel { display: inline-flex; gap: 10px; flex-wrap: wrap; }
 .sub-sel label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); white-space: nowrap; }
