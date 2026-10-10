@@ -519,3 +519,8 @@ footer {
 .linkish { border: 0; background: none; padding: 0 2px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 .dlg details { margin-top: 8px; }
 .dlg .btn { cursor: pointer; }
+
+/* TradingView 元件：網頁是深色時，iframe 會繼承 color-scheme: dark，而 TradingView 的頁面沒有宣告深色，
+   瀏覽器就把 iframe 底色畫成不透明白色，深色主題的淺灰字放在白底上幾乎看不見（手機最明顯）。
+   讓 iframe 用 normal，與 TradingView 頁面一致，底色才會透明、看到卡片的深色背景。 */
+.tradingview-widget-container iframe { color-scheme: normal; }
