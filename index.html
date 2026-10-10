@@ -15,13 +15,15 @@
 </header>
 <div class="tape" id="tape"></div>
 
-<main>
+<main class="wide">
   <div class="toolbar">
     <div class="seg mk-tabs" role="tablist" aria-label="市場">
       <button type="button" role="tab" data-mk="tw">台股</button>
       <button type="button" role="tab" data-mk="us">美股</button>
     </div>
-    <div class="seg view-btns" role="group" aria-label="顯示方式">
+    <div class="view-wrap">
+    <span class="view-label" id="view-label">畫面顯示：</span>
+    <div class="seg view-btns" role="group" aria-labelledby="view-label">
       <button type="button" data-view="small" title="小方塊" aria-label="小方塊">
         <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="4" height="4"/><rect x="6" y="1" width="4" height="4"/><rect x="11" y="1" width="4" height="4"/><rect x="1" y="6" width="4" height="4"/><rect x="6" y="6" width="4" height="4"/><rect x="11" y="6" width="4" height="4"/><rect x="1" y="11" width="4" height="4"/><rect x="6" y="11" width="4" height="4"/><rect x="11" y="11" width="4" height="4"/></svg>
       </button>
@@ -32,9 +34,17 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="2" width="14" height="2.4"/><rect x="1" y="6.8" width="14" height="2.4"/><rect x="1" y="11.6" width="14" height="2.4"/></svg>
       </button>
     </div>
+    </div>
   </div>
-  <div class="grid" id="tw" role="tabpanel"></div>
-  <div class="grid" id="us" role="tabpanel" hidden></div>
+  <!-- 每個市場一個分頁：方塊模式看 .grid，清單模式看 .list-pane（欄位與全台股總表相同＋近一年走勢） -->
+  <section id="pane-tw" role="tabpanel">
+    <div class="grid" id="tw"></div>
+    <div class="list-pane" id="tw-list"></div>
+  </section>
+  <section id="pane-us" role="tabpanel" hidden>
+    <div class="grid" id="us"></div>
+    <div class="list-pane" id="us-list"></div>
+  </section>
 </main>
 
 <dialog id="add-dlg" aria-labelledby="add-title">
@@ -55,6 +65,8 @@
 <script src="assets/layout.js"></script>
 <script src="assets/search.js"></script>
 <script src="assets/widgets.js"></script>
+<script src="assets/refs.js"></script>
+<script src="assets/stockcols.js"></script>
 <script>
 (async function () {
   let w;
@@ -139,7 +151,9 @@
     card.classList.add("busy");
     try {
       await App.editWatchlist("remove", m, item);
-      card.remove();
+      // 清單模式移除後重新整理（卡片和表格都要更新）；方塊模式直接拿掉卡片
+      if (card.tagName === "TR") location.reload();
+      else card.remove();
     } catch (err) {
       card.classList.remove("busy");
       alert(err.message);
@@ -165,11 +179,19 @@
 
   // 卡片：用自己的日 K 資料畫近一年走勢（紅漲綠跌）
   // 剛加入、排程還沒產生資料檔的股票先即時查詢；都失敗才退回 TradingView
+  // 每檔的日 K 資料只抓一次（方塊卡片和清單走勢圖共用）
+  const dataCache = {};
+  function stockData(item) {
+    const key = App.marketOf(item) + ":" + App.symbolOf(item);
+    if (!dataCache[key]) {
+      dataCache[key] = App.loadStockData(item).catch(() => App.loadLiveData(item)).catch((e) => { delete dataCache[key]; throw e; });
+    }
+    return dataCache[key];
+  }
+
   async function ownMini(host, item) {
     let d;
-    try { d = await App.loadStockData(item); } catch (e) {
-      try { d = await App.loadLiveData(item); } catch (e2) { return TV.miniOverview(host, item); }
-    }
+    try { d = await stockData(item); } catch (e) { return TV.miniOverview(host, item); }
     const c = d.price.close.slice(-250), dates = d.price.dates.slice(-250), n = c.length;
     if (n < 2) return TV.miniOverview(host, item);
     const diff = c[n - 1] - c[n - 2], pct = diff / c[n - 2] * 100;
@@ -199,8 +221,8 @@
       b.setAttribute("aria-pressed", String(on));
       b.setAttribute("aria-selected", String(on));
     });
-    document.getElementById("tw").hidden = mk !== "tw";
-    document.getElementById("us").hidden = mk !== "us";
+    document.getElementById("pane-tw").hidden = mk !== "tw";
+    document.getElementById("pane-us").hidden = mk !== "us";
     // 左側選單「我的追蹤 → 台股／美股」跟著標示目前分頁
     document.querySelectorAll(".sidebar a.sub").forEach((a) => {
       const h = a.getAttribute("href");
@@ -218,8 +240,91 @@
       g.classList.remove("view-small", "view-large", "view-list");
       g.classList.add("view-" + v);
     });
+    document.querySelector("main").classList.toggle("mode-list", v === "list");
+    if (v === "list") { renderList("tw"); renderList("us"); }
     viewBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
     try { localStorage.setItem("watch-view", v); } catch (e) {}
+  }
+
+  // ---------- 清單模式：欄位和全台股總表相同（assets/stockcols.js），多一欄近一年走勢 ----------
+  const listState = { tw: { key: null, dir: 1, rows: null }, us: { key: null, dir: 1, rows: null } };
+  async function listRows(m) {
+    if (listState[m].rows) return listState[m].rows;
+    if (m === "tw") {
+      let all = null;
+      try { all = await Refs.load(); } catch (e) {}
+      const pegLv = all ? Refs.levelsFor(all.rows, "peg") : {};
+      listState.tw.pegLv = pegLv;
+      listState.tw.rows = w.tw.map((it) => {
+        const s = Object.assign({ code: it.code, name: it.name, market: it.market }, all && all.byCode[it.code]);
+        s.peg_any = App.isNum(s.peg) ? s.peg : s.peg_est;
+        s._item = it;
+        return s;
+      });
+    } else {
+      let sum = null;
+      try { sum = await App.loadJSON("data/summary.json"); } catch (e) {}
+      const bySym = {};
+      ((sum && sum.stocks) || []).filter((x) => x.market === "US").forEach((x) => { bySym[x.symbol] = StockCols.fromSummary(x); });
+      listState.us.rows = w.us.map((it) => Object.assign({ code: it.ticker, name: it.name }, bySym[it.ticker.toUpperCase()], { _item: it }));
+    }
+    return listState[m].rows;
+  }
+
+  async function renderList(m) {
+    const host = document.getElementById(m + "-list");
+    const rows = await listRows(m);
+    const base = m === "tw" ? StockCols.tw(listState.tw.pegLv || {}) : StockCols.us();
+    // 走勢圖放在「漲跌」後面
+    const at = base.findIndex((c) => c.k === "change_pct") + 1;
+    const cols = base.slice(0, at).concat([{ k: "_spark", t: "近一年走勢", nosort: true, f: (s) => '<span class="sp" data-sym="' + App.esc(s.code) + '"></span>' }], base.slice(at));
+    const st = listState[m];
+    let list = rows.slice();
+    if (st.key) {
+      list.sort((a, b) => {
+        const x = a[st.key], y = b[st.key];
+        if (x == null && y == null) return 0;
+        if (x == null) return 1;
+        if (y == null) return -1;
+        return (typeof x === "string" ? x.localeCompare(y, "zh-TW") : x - y) * st.dir;
+      });
+    }
+    host.innerHTML =
+      '<div class="table-wrap big-table watch-table"><table><thead><tr>' +
+        cols.map((c, i) => '<th class="' + (c.nosort ? "" : "sort") + (c.l ? " l" : "") + (i < 2 ? " stick s" + i : "") + '"' +
+          (c.nosort ? "" : ' data-k="' + c.k + '" tabindex="0"') + (st.key === c.k ? ' aria-sort="' + (st.dir > 0 ? "ascending" : "descending") + '"' : "") + ">" + c.t + "</th>").join("") +
+        "<th></th></tr></thead><tbody>" +
+        list.map((s) => '<tr class="link" data-sym="' + App.esc(s.code) + '">' +
+          cols.map((c, i) => "<td" + (c.l || i < 2 ? ' class="' + (c.l ? "l" : "") + (i < 2 ? " stick s" + i : "") + '"' : "") + ">" + c.f(s) + "</td>").join("") +
+          '<td><button type="button" class="rm-row" title="從追蹤清單移除" aria-label="從追蹤清單移除 ' + App.esc(s.name) + '">×</button></td></tr>').join("") +
+      "</tbody></table></div>" +
+      '<button type="button" class="list-add">＋ 加入' + (m === "tw" ? "台股" : "美股") + "</button>";
+
+    // 走勢圖：資料到了就畫上去
+    list.forEach((s) => {
+      stockData(s._item).then((d) => {
+        const cell = host.querySelector('.sp[data-sym="' + CSS.escape(s.code) + '"]');
+        if (cell) cell.innerHTML = StockCols.spark(d.price.close.slice(-250));
+      }).catch(() => {});
+    });
+    host.querySelectorAll("th[data-k]").forEach((th) => {
+      const go = () => {
+        const c = cols.find((x) => x.k === th.dataset.k);
+        st.dir = st.key === c.k ? -st.dir : (c.asc ? 1 : -1);
+        st.key = c.k;
+        renderList(m);
+      };
+      th.addEventListener("click", go);
+      th.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    });
+    host.querySelector("tbody").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-sym]");
+      if (!tr) return;
+      const s = list.find((x) => x.code === tr.dataset.sym);
+      if (e.target.closest(".rm-row")) { removeStock(m, s._item, tr); return; }
+      location.href = "stock.html?symbol=" + encodeURIComponent(s.code) + "&m=" + m;
+    });
+    host.querySelector(".list-add").addEventListener("click", () => openAdd(m));
   }
   viewBtns.forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
   let view = "large";

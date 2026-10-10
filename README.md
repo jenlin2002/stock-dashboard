@@ -165,6 +165,7 @@ functions/api/intraday.js    Cloudflare Pages Function：分鐘 K 線（Yahoo �
 data/all/cashflow.json       全台股現金流量快取（scripts/fetch_cashflow.py 每天輪流更新 450 檔）
 data/all/revenue_hist.json   近 13 個月月營收快取（公開資訊觀測站）
 assets/refs.js               本益成長比評分卡（REFS 五分位燈號）
+assets/stockcols.js          股票表格欄位定義（全台股總表、我的追蹤清單模式共用）
 scripts/                     抓資料的 Python 程式
 assets/                      網頁共用的 CSS、JavaScript（app、charts、indicators、widgets）
 tradingview/                 TradingView 用的 Pine Script
