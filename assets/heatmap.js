@@ -61,13 +61,14 @@
       .filter((g) => g.value > 0).sort((a, b) => b.value - a.value);
     let html = "";
     squarify(groups, 0, 0, W, H).forEach(({ item: g, x, y, w, h }) => {
-      const head = w > 60 && h > 40 ? 16 : 0;  // 產業名稱列
+      const head = g.name && w > 60 && h > 40 ? 16 : 0;  // 產業名稱列（沒有名稱就不留）
       html += '<div class="hm-group" style="left:' + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + 'px">' +
         (head ? '<div class="hm-gname">' + esc(g.name) + "</div>" : "");
       squarify(g.items, 1, head + 1, w - 2, h - head - 2).forEach(({ item: it, x: ix, y: iy, w: iw, h: ih }) => {
         const big = iw > 46 && ih > 28;
         const fs = Math.max(10, Math.min(22, Math.sqrt(iw * ih) / 5));
-        html += '<a class="hm-tile" href="' + esc(it.href) + '" title="' + esc(it.title) + '" style="left:' + ix + "px;top:" + iy + "px;width:" + iw + "px;height:" + ih +
+        // 有 key 的方塊（類股）由頁面處理點擊；沒有的直接連到 href（個股頁）
+        html += '<a class="hm-tile" href="' + esc(it.href || "#") + '"' + (it.key ? ' data-key="' + esc(it.key) + '"' : "") + ' title="' + esc(it.title) + '" style="left:' + ix + "px;top:" + iy + "px;width:" + iw + "px;height:" + ih +
           "px;background:" + color(it.pct, range) + ";font-size:" + fs.toFixed(1) + 'px">' +
           (big ? "<b>" + esc(it.label) + "</b>" + (ih > fs * 2.6 ? "<span>" + (it.pct > 0 ? "+" : "") + (it.pct == null ? "—" : it.pct.toFixed(2) + "%") + "</span>" : "") : "") + "</a>";
       });

@@ -179,7 +179,7 @@
   document.getElementById("kline-note").hidden = false;
 
   // ---------- K 線設定（記在瀏覽器，讀不到就用預設） ----------
-  const MAS = Charts.MAS, SUBS = ["dmi", "kd", "macd", "none"];
+  const MAS = Charts.MAS, SUBS = ["dmi", "kd", "rsi", "macd", "none"];
   let opts = { ma: MAS.slice(), deduct: true, sub: "dmi" };
   try { opts = Object.assign(opts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
   opts.ma = MAS.filter((x) => (opts.ma || []).includes(x));
@@ -214,13 +214,16 @@
     MAS.map((x) => '<label><input type="checkbox" data-ma="' + x + '"' + (opts.ma.includes(x) ? " checked" : "") + '><i style="background:' + Charts.MA_COLORS[x] + '"></i>MA' + x + "</label>").join("") +
     '<label><input type="checkbox" data-deduct' + (opts.deduct ? " checked" : "") + ">扣抵</label>" +
     '<span class="seg" role="group" aria-label="副圖">' +
-      ["dmi:DMI", "kd:KD", "macd:MACD", "none:不顯示"].map((s) => { const [k, t] = s.split(":"); return '<button type="button" data-sub="' + k + '" aria-pressed="' + (opts.sub === k) + '">' + t + "</button>"; }).join("") +
-    "</span>";
+      ["dmi:DMI", "kd:KD", "rsi:RSI", "macd:MACD", "none:不顯示"].map((s) => { const [k, t] = s.split(":"); return '<button type="button" data-sub="' + k + '" aria-pressed="' + (opts.sub === k) + '">' + t + "</button>"; }).join("") +
+    "</span>" +
+    '<label class="track" title="打勾：游標移到哪根 K 棒，上方數值、扣抵就換成那一根；不打勾：游標只顯示十字線">' +
+      '<input type="checkbox" data-track' + (opts.track !== false ? " checked" : "") + ">查價</label>";
   kctl.hidden = false;
   kctl.addEventListener("change", (e) => {
     const t = e.target;
     if (t.dataset.ma) opts.ma = MAS.filter((x) => kctl.querySelector('[data-ma="' + x + '"]').checked);
     if ("deduct" in t.dataset) opts.deduct = t.checked;
+    if ("track" in t.dataset) opts.track = t.checked;
     saveOpts();
     drawCharts();
   });
@@ -264,6 +267,7 @@
       const C = Charts.SUB_COLORS;
       if (opts.sub === "dmi") html += '<span class="up">+DI' + Charts.DMI_N + " " + vfmt(k.values.PDI[i]) + '</span><span class="down">−DI ' + vfmt(k.values.MDI[i]) + '</span><span style="color:#1c7ed6">ADX ' + vfmt(k.values.ADX[i]) + "</span>";
       if (opts.sub === "kd") html += '<span style="color:' + C[0] + '">K ' + vfmt(k.values.K[i]) + '</span><span style="color:' + C[1] + '">D ' + vfmt(k.values.D[i]) + "</span>";
+      if (opts.sub === "rsi") html += '<span style="color:' + C[0] + '">RSI6 ' + vfmt(k.values.RSI6[i]) + '</span><span style="color:' + C[1] + '">RSI12 ' + vfmt(k.values.RSI12[i]) + "</span>";
       if (opts.sub === "macd") html += '<span style="color:' + C[0] + '">DIF ' + vfmt(k.values.DIF[i], 3) + '</span><span style="color:' + C[1] + '">MACD ' + vfmt(k.values.MACD[i], 3) + '</span><span class="' + App.upDown(k.values.OSC[i]) + '">OSC ' + vfmt(k.values.OSC[i], 3) + "</span>";
       lg.innerHTML = html;
       renderDeductTable(i, k.volArr);  // 扣抵表也跟著游標所在的那天

@@ -27,14 +27,14 @@
   <section id="pane-tw" role="tabpanel">
     <div class="tiles" id="tw-tiles"></div>
     <section class="panel" id="p-heat-tw">
-      <h3>台股熱力圖 <span class="updated">方塊大小＝市值、顏色＝今日漲跌（紅漲綠跌）、依產業分區；點方塊進個股</span></h3>
-      <div class="tf-tabs"><span class="seg" id="tw-heat-n"></span> <span class="seg" id="tw-heat-mk"></span></div>
+      <h3>台股熱力圖 <span class="updated" id="tw-heat-hint"></span></h3>
+      <div class="tf-tabs"><span class="seg" id="tw-heat-view"></span> <span class="seg" id="tw-heat-n"></span> <span class="seg" id="tw-heat-mk"></span> <span id="tw-heat-chip"></span></div>
       <div class="heat" id="tw-heat"></div>
       <div class="heat-legend" id="tw-heat-legend"></div>
     </section>
     <section class="panel" id="p-k">
       <h3 id="tw-title">K 線</h3>
-      <div class="tf-tabs"><span class="seg" id="tw-src"></span> <span class="seg" id="tw-tf"></span> <span class="seg" id="tw-sub-btns"></span></div>
+      <div class="tf-tabs"><span class="seg" id="tw-src"></span> <span class="seg" id="tw-tf"></span> <span class="seg" id="tw-sub-btns"></span> <span id="tw-track"></span></div>
       <div class="klegend" id="tw-legend"></div>
       <div class="body chart-body" id="tw-chart"></div>
       <div class="body sub-body" id="tw-sub"></div>
@@ -61,15 +61,15 @@
   <section id="pane-us" role="tabpanel" hidden>
     <div class="tiles" id="us-tiles"></div>
     <section class="panel" id="p-heat-us">
-      <h3>美股熱力圖 <span class="updated">方塊大小＝市值、顏色＝最近一個交易日漲跌（紅漲綠跌）、依產業分區；點方塊進個股</span></h3>
-      <div class="tf-tabs"><span class="seg" id="us-heat-n"></span></div>
+      <h3>美股熱力圖 <span class="updated" id="us-heat-hint"></span></h3>
+      <div class="tf-tabs"><span class="seg" id="us-heat-view"></span> <span class="seg" id="us-heat-n"></span> <span id="us-heat-chip"></span></div>
       <div class="heat" id="us-heat"></div>
       <div class="heat-legend" id="us-heat-legend"></div>
       <p class="note" id="us-heat-note"></p>
     </section>
     <section class="panel">
       <h3 id="us-title">K 線</h3>
-      <div class="tf-tabs"><span class="seg" id="us-src"></span> <span class="seg" id="us-tf"></span> <span class="seg" id="us-sub-btns"></span></div>
+      <div class="tf-tabs"><span class="seg" id="us-src"></span> <span class="seg" id="us-tf"></span> <span class="seg" id="us-sub-btns"></span> <span id="us-track"></span></div>
       <div class="klegend" id="us-legend"></div>
       <div class="body chart-body" id="us-chart"></div>
       <div class="body sub-body" id="us-sub"></div>
@@ -226,8 +226,10 @@
       const off = !src.minute && !"DWM".includes(k);
       return '<button type="button" data-tf="' + k + '" aria-pressed="' + (k === st.tf) + '"' + (off ? ' disabled title="' + src.name + '沒有免費的盤中資料"' : "") + ">" + t + "</button>";
     }).join("");
-    document.getElementById(mk + "-sub-btns").innerHTML = [["dmi", "DMI"], ["kd", "KD"], ["macd", "MACD"], ["none", "不顯示"]]
+    document.getElementById(mk + "-sub-btns").innerHTML = [["dmi", "DMI"], ["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["none", "不顯示"]]
       .map(([k, t]) => '<button type="button" data-sub="' + k + '" aria-pressed="' + (kopts.sub === k) + '">' + t + "</button>").join("");
+    document.getElementById(mk + "-track").innerHTML = '<label class="track" title="打勾：游標移到哪根 K 棒，上方數值、扣抵就換成那一根；不打勾：游標只顯示十字線">' +
+      '<input type="checkbox"' + (kopts.track !== false ? " checked" : "") + ">查價</label>";
   }
 
   async function drawK(mk) {
@@ -245,7 +247,7 @@
     }
     if (seq !== st.seq) return;
     Charts.destroyKlines();
-    const k = Charts.kline(document.getElementById(mk + "-chart"), document.getElementById(mk + "-sub"), { market: "IDX", price: p }, kopts);
+    const k = Charts.kline(document.getElementById(mk + "-chart"), document.getElementById(mk + "-sub"), { market: "IDX", price: p, volUnit: src.unit }, kopts);
     const intraday = typeof p.dates[0] === "number";
     k.onCrosshair((i) => {
       const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
@@ -273,6 +275,11 @@
       if (!b) return;
       kopts.sub = b.dataset.sub;
       try { localStorage.setItem("kline-opts-v2", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("kline-opts-v2") || "{}"), { sub: kopts.sub }))); } catch (err) {}
+      drawK(mk);
+    });
+    document.getElementById(mk + "-track").addEventListener("change", (e) => {
+      kopts.track = e.target.checked;
+      try { localStorage.setItem("kline-opts-v2", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("kline-opts-v2") || "{}"), { track: kopts.track }))); } catch (err) {}
       drawK(mk);
     });
   });
@@ -323,16 +330,26 @@
   }
 
   // ---------- 熱力圖 ----------
+  // view：stock＝個股、sector＝類股；sector：只看某一類股（從類股方塊點進來）
   const heat = {
-    tw: { n: "300", mk: "all", range: 5, rows: null, file: "data/all/stocks.json", sizes: [["100", "前 100 大"], ["300", "前 300 大"], ["all", "全部"]] },
-    us: { n: "300", range: 3, rows: null, file: "data/all/us_stocks.json", sizes: [["100", "前 100 大"], ["300", "前 300 大"], ["500", "前 500 大"]] },
+    tw: { view: "stock", sector: null, n: "300", mk: "all", range: 5, rows: null, file: "data/all/stocks.json", sizes: [["100", "前 100 大"], ["300", "前 300 大"], ["all", "全部"]] },
+    us: { view: "stock", sector: null, n: "300", range: 3, rows: null, file: "data/all/us_stocks.json", sizes: [["100", "前 100 大"], ["300", "前 300 大"], ["500", "前 500 大"]] },
   };
   try { const s = JSON.parse(localStorage.getItem("market-heat") || "{}"); ["tw", "us"].forEach((k) => Object.assign(heat[k], s[k] || {})); } catch (e) {}
-  const saveHeat = () => { try { localStorage.setItem("market-heat", JSON.stringify({ tw: { n: heat.tw.n, mk: heat.tw.mk }, us: { n: heat.us.n } })); } catch (e) {} };
+  const saveHeat = () => { try { localStorage.setItem("market-heat", JSON.stringify({ tw: { n: heat.tw.n, mk: heat.tw.mk, view: heat.tw.view }, us: { n: heat.us.n, view: heat.us.view } })); } catch (e) {} };
+  const sectorOf = (mk, s) => (mk === "tw" ? s.industry : s.sector || "其他");
 
   async function drawHeat(mk) {
     const h = heat[mk], host = document.getElementById(mk + "-heat");
-    document.getElementById(mk + "-heat-n").innerHTML = h.sizes.map(([k, t]) => '<button type="button" data-n="' + k + '" aria-pressed="' + (h.n === k) + '">' + t + "</button>").join("");
+    document.getElementById(mk + "-heat-view").innerHTML = [["stock", "個股"], ["sector", "類股"]]
+      .map(([k, t]) => '<button type="button" data-view="' + k + '" aria-pressed="' + (h.view === k) + '">' + t + "</button>").join("");
+    document.getElementById(mk + "-heat-n").innerHTML = h.view === "sector" ? "" :
+      h.sizes.map(([k, t]) => '<button type="button" data-n="' + k + '" aria-pressed="' + (h.n === k) + '">' + t + "</button>").join("");
+    document.getElementById(mk + "-heat-chip").innerHTML = h.sector && h.view === "stock"
+      ? '<button type="button" class="btn heat-chip">只看：' + App.esc(h.sector) + "　✕ 看全部</button>" : "";
+    document.getElementById(mk + "-heat-hint").textContent = h.view === "sector"
+      ? "方塊大小＝類股總市值、顏色＝市值加權漲跌（紅漲綠跌）；點類股看裡面的個股"
+      : "方塊大小＝市值、顏色＝" + (mk === "tw" ? "今日" : "最近一個交易日") + "漲跌（紅漲綠跌）、依產業分區；點方塊進個股";
     if (mk === "tw") {
       document.getElementById("tw-heat-mk").innerHTML = [["all", "上市＋上櫃"], ["TWSE", "上市"], ["TPEX", "上櫃"]]
         .map(([k, t]) => '<button type="button" data-mk="' + k + '" aria-pressed="' + (h.mk === k) + '">' + t + "</button>").join("");
@@ -348,10 +365,34 @@
     }
     let rows = h.rows.filter((s) => App.isNum(s.mktcap) && s.mktcap > 0 && (mk === "us" || h.mk === "all" || s.market === h.mk));
     rows.sort((a, b) => b.mktcap - a.mktcap);
+
+    // 類股模式：每個產業一塊（全部股票都算進去）
+    if (h.view === "sector") {
+      const by = {};
+      rows.forEach((s) => (by[sectorOf(mk, s)] = by[sectorOf(mk, s)] || []).push(s));
+      const items = Object.entries(by).map(([name, g]) => {
+        const cap = g.reduce((a, s) => a + s.mktcap, 0);
+        const w = g.filter((s) => App.isNum(s.change_pct));
+        const wcap = w.reduce((a, s) => a + s.mktcap, 0);
+        const pct = wcap ? w.reduce((a, s) => a + s.change_pct * s.mktcap, 0) / wcap : null;
+        const up = g.filter((s) => s.change_pct > 0).length, down = g.filter((s) => s.change_pct < 0).length;
+        return {
+          key: name, label: name, value: cap, pct,
+          title: name + "\n" + g.length + " 檔・總市值 " + (mk === "tw" ? App.fmtNum(cap / 1e8, 0) + " 億" : "$" + App.fmtNum(cap / 1e9, 0) + "B") +
+            "\n市值加權漲跌 " + App.fmtPct(pct, true) + "\n上漲 " + up + "・下跌 " + down + "\n點一下看這個類股的個股",
+        };
+      });
+      Heatmap.render(host, [{ name: "", items }], { range: h.range * 0.6 });  // 類股平均漲跌幅較小，顏色範圍縮小一點
+      document.getElementById(mk + "-heat-legend").innerHTML = Heatmap.legend(h.range * 0.6);
+      return;
+    }
+
+    if (h.sector) rows = rows.filter((s) => sectorOf(mk, s) === h.sector);
     if (h.n !== "all") rows = rows.slice(0, +h.n);
     const groups = {};
     rows.forEach((s) => {
-      const g = mk === "tw" ? s.industry : s.sector || "其他";
+      // 只看一個類股時，美股再依細產業分區；台股就是那一個產業
+      const g = h.sector && mk === "us" ? s.industry || h.sector : sectorOf(mk, s);
       const pct = s.change_pct;
       (groups[g] = groups[g] || []).push({
         label: mk === "tw" ? s.name : s.code, value: s.mktcap, pct,
@@ -364,6 +405,20 @@
   }
   ["tw", "us"].forEach((mk) => {
     document.getElementById(mk + "-heat-n").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { heat[mk].n = b.dataset.n; saveHeat(); drawHeat(mk); } });
+    document.getElementById(mk + "-heat-view").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b) { heat[mk].view = b.dataset.view; heat[mk].sector = null; saveHeat(); drawHeat(mk); }
+    });
+    document.getElementById(mk + "-heat-chip").addEventListener("click", () => { heat[mk].sector = null; drawHeat(mk); });
+    // 點類股方塊：切到個股、只看該類股
+    document.getElementById(mk + "-heat").addEventListener("click", (e) => {
+      const a = e.target.closest(".hm-tile[data-key]");
+      if (!a) return;
+      e.preventDefault();
+      heat[mk].sector = a.dataset.key;
+      heat[mk].view = "stock";
+      drawHeat(mk);
+    });
   });
   document.getElementById("tw-heat-mk").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { heat.tw.mk = b.dataset.mk; saveHeat(); drawHeat("tw"); } });
   // 視窗大小改變時重新排版

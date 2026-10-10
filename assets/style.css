@@ -294,6 +294,16 @@ tr.busy { opacity: .4; pointer-events: none; }
   .t-val { font-size: 18px; }
 }
 .tf-tabs button:disabled { opacity: .4; cursor: not-allowed; }
+/* K 線「查價」資訊小框 */
+.k-tip {
+  position: absolute; z-index: 5; pointer-events: none; min-width: 120px;
+  padding: 6px 9px; border-radius: 6px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 94%, transparent); box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  font-size: 12px; line-height: 1.55; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.k-tip b { color: var(--text); font-weight: 600; }
+.k-tip .k-tip-d { color: var(--text); font-weight: 600; margin-bottom: 2px; }
+label.track { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 13px; cursor: pointer; white-space: nowrap; }
 
 /* 首頁：上市股票用自己的資料畫的小卡 */
 .own-mini { display: flex; flex-direction: column; height: 100%; padding: 8px 14px 10px; }

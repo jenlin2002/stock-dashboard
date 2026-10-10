@@ -84,6 +84,18 @@
     return { plus, minus, adx: rma(dx, m) };
   }
 
+  // RSI（Wilder）：平均漲幅 ÷（平均漲幅＋平均跌幅）× 100，平均用 Wilder 平滑（RMA）
+  function rsi(close, n) {
+    const up = [null], dn = [null];
+    for (let i = 1; i < close.length; i++) {
+      const d = close[i] - close[i - 1];
+      up.push(d > 0 ? d : 0);
+      dn.push(d < 0 ? -d : 0);
+    }
+    const au = rma(up, n), ad = rma(dn, n);
+    return au.map((u, i) => (u == null || ad[i] == null ? null : ad[i] === 0 ? 100 : 100 - 100 / (1 + u / ad[i])));
+  }
+
   // 均線扣抵：今天的 n 日均線包含第 t−n+1 ～ t 根；明天會「扣掉」第 t−n+1 根（扣抵值）。
   // 明天收盤 > 扣抵值，均線上揚；< 扣抵值，均線下彎。
   // 未來 5 天的扣抵值若多數低於現價（扣低），均線較容易維持上揚。
@@ -108,5 +120,5 @@
     };
   }
 
-  window.Ind = { sma, ema, rma, kd, macd, dmi, deduction };
+  window.Ind = { sma, ema, rma, kd, macd, dmi, rsi, deduction };
 })();

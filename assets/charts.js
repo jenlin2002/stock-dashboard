@@ -130,6 +130,14 @@
       adx.setData(series(p.dates, r.adx));
       adx.createPriceLine({ price: 25, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
       values.PDI = r.plus; values.MDI = r.minus; values.ADX = r.adx;
+    } else if (opts.sub === "rsi") {
+      sub = LightweightCharts.createChart(subHost, chartOptions(tsOpt));
+      const r6 = Ind.rsi(p.close, 6), r12 = Ind.rsi(p.close, 12);
+      const a = line(sub, SUB_COLORS[0], { lineWidth: 2 });
+      a.setData(series(p.dates, r6));
+      line(sub, SUB_COLORS[1], { lineWidth: 2 }).setData(series(p.dates, r12));
+      [70, 50, 30].forEach((lv) => a.createPriceLine({ price: lv, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: lv !== 50 }));
+      values.RSI6 = r6; values.RSI12 = r12;
     } else if (opts.sub === "kd") {
       sub = LightweightCharts.createChart(subHost, chartOptions(tsOpt));
       const r = Ind.kd(p.high, p.low, p.close, 9, 3, 3);
@@ -165,15 +173,46 @@
     chart.timeScale().setVisibleLogicalRange({ from: n - 130, to: n + 2 });  // 預設看近半年
     if (sub) sub.timeScale().setVisibleLogicalRange({ from: n - 130, to: n + 2 });
 
-    // 游標移動時回報是第幾根 K 棒，沒有游標時回報最後一根
+    // 游標移動時回報是第幾根 K 棒，沒有游標時回報最後一根。
+    // opts.track === false（「查價」沒打勾）：游標只顯示十字線，數值與扣抵固定在最新一根
     const listeners = [];
-    const report = (param) => {
-      const i = param && param.logical != null && param.logical >= 0 && param.logical < n ? Math.round(param.logical) : n - 1;
+    const report = (param, fromMain) => {
+      const onBar = param && param.logical != null && param.logical >= 0 && param.logical < n;
+      const i = opts.track !== false && onBar ? Math.round(param.logical) : n - 1;
       showDeduction(i);
       listeners.forEach((fn) => fn(i));
+      // 「查價」打勾：在滑鼠指到的 K 棒旁顯示資訊小框（只在主圖上）
+      if (opts.track !== false && onBar && fromMain && param.point) showTip(Math.round(param.logical), param.point);
+      else tip.style.display = "none";
     };
-    chart.subscribeCrosshairMove(report);
-    if (sub) sub.subscribeCrosshairMove(report);
+    chart.subscribeCrosshairMove((p) => report(p, true));
+    if (sub) sub.subscribeCrosshairMove((p) => report(p, false));
+
+    // 資訊小框：日期、開高低收、漲跌、量、各均線
+    const tip = document.createElement("div");
+    tip.className = "k-tip";
+    tip.style.display = "none";
+    host.appendChild(tip);
+    const volUnit = d.volUnit != null ? d.volUnit : d.market === "TW" ? "張" : "";
+    const f2 = (x) => (App.isNum(x) ? App.fmtNum(x, Math.abs(x) >= 1000 ? 0 : 2) : "—");
+    function showTip(i, pt) {
+      const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
+      const cls = App.upDown(chg);
+      let html = '<div class="k-tip-d">' + timeLabel(p.dates[i]) + "</div>" +
+        "<div>開 <b>" + f2(p.open[i]) + "</b></div><div>高 <b>" + f2(p.high[i]) + "</b></div><div>低 <b>" + f2(p.low[i]) + "</b></div>" +
+        '<div>收 <b class="' + cls + '">' + f2(p.close[i]) + "</b> " + '<span class="' + cls + '">' + App.fmtPct(chg, true) + "</span></div>" +
+        "<div>量 <b>" + App.fmtNum(values.vol[i], 0) + "</b> " + volUnit + "</div>";
+      opts.ma.forEach((m) => { html += '<div style="color:' + MA_COLORS[m] + '">MA' + m + " <b>" + f2(values["MA" + m][i]) + "</b></div>"; });
+      tip.innerHTML = html;
+      tip.style.display = "block";
+      // 放在游標右下，靠近邊緣就換到左邊／上面
+      const W = host.clientWidth, H = host.clientHeight, tw = tip.offsetWidth, th = tip.offsetHeight;
+      let x = pt.x + 16, y = pt.y + 16;
+      if (x + tw > W - 80) x = pt.x - tw - 16;   // 右邊留給價格座標
+      if (y + th > H) y = Math.max(0, pt.y - th - 16);
+      tip.style.left = Math.max(0, x) + "px";
+      tip.style.top = y + "px";
+    }
     showDeduction(n - 1);
 
     return { values, volArr, onCrosshair: (fn) => { listeners.push(fn); fn(n - 1); } };
