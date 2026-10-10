@@ -14,7 +14,8 @@
       { k: "revhigh", t: "月營收創高", d: "最新月營收創近 13 個月新高", rev: true, steps: [["月營收創近 13 個月新高", (s, x) => x.revHigh.has(s.code)], ["月營收年增 ≥ 20%", (s) => s.rev_yoy >= 20], ["近四季 EPS > 0", (s) => s.eps_ttm > 0]] },
     ],
     us: [
-      { k: "r40", t: "美股 Rule of 40", d: "營收成長＋自由現金流率 ≥ 40%", need: "美股營收成長、自由現金流" },
+      { k: "r40", t: "美股 Rule of 40", d: "營收成長＋自由現金流率 ≥ 40%", usData: true, steps: [["營收成長 > 0", (s) => s.rev_growth > 0], ["自由現金流率 > 0", (s) => s.fcf_margin > 0], ["Rule of 40 ≥ 40", (s) => s.rule40 >= 40]] },
+      { k: "usgarp", t: "美股成長 GARP", d: "EPS 成長、PEG ≤ 1", usData: true, steps: [["近四季 EPS > 0", (s) => s.eps_ttm > 0], ["EPS 成長 ≥ 15%", (s) => s.eps_growth >= 15], ["PEG ≤ 1", (s) => s.peg > 0 && s.peg <= 1]] },
     ],
   };
   async function revHighSet() {
@@ -48,39 +49,41 @@
       q("strats").hidden = q("funnel").hidden = !!st.list;
       let tw, us;
       try { tw = await Data.twAll(); } catch (e) { q("rows").innerHTML = '<p class="note">— 讀不到全台股總表</p>'; return; }
+      if (st.mk === "us" || (st.list && st.list.keys.some((k) => k.startsWith("us:")))) { try { us = await Data.usAll(); } catch (e) {} }
       if (st.list) {
-        if (st.list.keys.some((k) => k.startsWith("us:"))) { try { us = await Data.usAll(); } catch (e) {} }
         result = st.list.keys.map((k) => { const [m, c] = k.split(":"); const s = (m === "tw" ? tw.by.get(c) : us && us.by.get(c)) || { code: c, name: c }; return Object.assign({ _m: m }, s); });
         q("asof").textContent = "資料 " + tw.updated;
-        return rows(tw);
+        return rows(tw, us);
       }
       const strats = STRATS[st.mk];
       if (!strats.some((s) => s.k === st.strat)) st.strat = strats[0].k;
-      const off = (s) => s.need || (s.data && !tw.screener);
+      const off = (s) => s.need || (s.data && !tw.screener) || (s.usData && !(us && us.fundamentals));
       if (off(strats.find((s) => s.k === st.strat) || {})) st.strat = (strats.find((s) => !off(s)) || strats[0]).k;
       q("strats").innerHTML = strats.map((s) => '<button type="button" class="fn-card" data-s="' + s.k + '" aria-pressed="' + (st.strat === s.k) + '"' +
-        (off(s) ? ' disabled title="需要「' + (s.need || "選股器資料 data/screener-tw.json") + '」，待補"' : "") + "><b>" + s.t + "</b><span>" + s.d + "</span>" + (off(s) ? "<em>待補</em>" : "") + "</button>").join("");
+        (off(s) ? ' disabled title="需要「' + (s.need || (s.usData ? "美股選股資料 data/screener-us.json" : "選股器資料 data/screener-tw.json")) + '」，待補"' : "") + "><b>" + s.t + "</b><span>" + s.d + "</span>" + (off(s) ? "<em>待補</em>" : "") + "</button>").join("");
       const S = strats.find((s) => s.k === st.strat);
       if (S.need) { q("funnel").innerHTML = '<p class="note">— 這個策略需要「' + S.need + "」資料，第 7 步補上。</p>"; q("rows").innerHTML = ""; result = []; return; }
       if (S.rev && !extra.revHigh.size) {
         try { const r = await revHighSet(); extra.revHigh = r.set; extra.revMonth = r.month; } catch (e) { q("funnel").innerHTML = '<p class="note">— 讀不到月營收歷史（revenue_hist.json）</p>'; return; }
       }
-      let list = tw.rows.filter((s) => isNum(s.close));
-      const layers = [["全部（上市櫃）", list.length]];
+      const src = st.mk === "us" ? us : tw;
+      if (!src) { q("rows").innerHTML = '<p class="note">— 讀不到美股資料</p>'; return; }
+      let list = src.rows.filter((s) => isNum(s.close));
+      const layers = [[st.mk === "us" ? "全部美股" : "全部（上市櫃）", list.length]];
       for (const [label, f] of S.steps) { list = list.filter((s) => f(s, extra)); layers.push([label, list.length]); }
       const max = layers[0][1] || 1;
       q("funnel").innerHTML = layers.map(([label, n], i) => '<div class="fn-layer" style="--w:' + Math.max(18, n / max * 100).toFixed(1) + '%"><span>' + (i ? "＋ " : "") + label + "</span><b>" + n.toLocaleString() + " 檔</b></div>").join("");
-      q("asof").textContent = "資料 " + tw.updated + (S.rev && extra.revMonth ? "・營收 " + extra.revMonth : "") + (S.data && tw.screener ? "・價量 " + tw.screener.price_date + "・法人 " + tw.screener.inst_date : "");
-      result = list.sort((a, b) => (b.mktcap || 0) - (a.mktcap || 0)).map((s) => Object.assign({ _m: "tw" }, s));
-      rows(tw);
+      q("asof").textContent = st.mk === "us" ? "資料 " + us.updated + (us.fundamentals ? "・SEC 財報到 " + us.fundamentals.quarter : "") : "資料 " + tw.updated + (S.rev && extra.revMonth ? "・營收 " + extra.revMonth : "") + (S.data && tw.screener ? "・價量 " + tw.screener.price_date + "・法人 " + tw.screener.inst_date : "");
+      result = list.sort((a, b) => (b.mktcap || 0) - (a.mktcap || 0)).map((s) => Object.assign({ _m: st.mk }, s));
+      rows(tw, us);
     }
-    function rows(tw) {
-      const f = Scoring.faces(tw.rows);
+    function rows(tw, us) {
+      const f = Scoring.faces(tw.rows), fu = us ? Scoring.faces(us.rows) : new Map();
       q("count").textContent = "共 " + result.length + " 檔" + (st.list ? "" : "，依市值排序");
       q("rows").innerHTML = result.length ? '<div class="table-wrap"><table><thead><tr><th class="l">名稱</th><th class="l">產業</th><th>股價</th><th>漲跌</th><th class="l" title="基＝基本面、價＝評價、技＝技術面、籌＝籌碼面（0–100）">四面評分</th><th>PEG</th><th>自選</th></tr></thead><tbody>' +
         result.slice(0, st.show).map((s) => '<tr class="link" data-m="' + s._m + '" data-code="' + App.esc(s.code) + '"><td class="l"><b>' + App.esc(s.name) + '</b> <span class="updated">' + (s._m === "us" ? "美・" : "") + App.esc(s.code) + "</span></td>" +
           '<td class="l">' + App.esc(s.industry || s.sector || "—") + "</td><td>" + (s._m === "us" && isNum(s.close) ? "$" : "") + App.fmtPrice(s.close) + '</td><td class="' + App.upDown(s.change_pct) + '">' + App.fmtPct(s.change_pct, true) + "</td>" +
-          '<td class="l">' + Scoring.dots(s._m === "tw" ? f.get(s.code) : null) + "</td><td>" + (isNum(pegOf(s)) ? App.fmtNum(pegOf(s), 2) + (isNum(s.peg) ? "" : "*") : "—") + "</td>" +
+          '<td class="l">' + Scoring.dots((s._m === "tw" ? f : fu).get(s.code)) + "</td><td>" + (isNum(pegOf(s)) ? App.fmtNum(pegOf(s), 2) + (isNum(s.peg) ? "" : "*") : "—") + "</td>" +
           '<td><button type="button" class="btn fav-btn" data-fav aria-label="加入自選 ' + App.esc(s.name) + '">☆ 自選</button></td></tr>').join("") + "</tbody></table></div>"
         : '<p class="note" style="padding:0 14px">— ' + (st.list ? "這個清單還沒有股票（在結果列按「☆ 自選」加入）" : "沒有符合的股票") + "</p>";
       q("more").innerHTML = result.length > st.show ? '<button type="button" class="btn" data-act="more">再顯示 50 檔（還有 ' + (result.length - st.show) + " 檔）</button>" : "";

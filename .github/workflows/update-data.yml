@@ -84,6 +84,14 @@ jobs:
         continue-on-error: true
         run: python scripts/build_us_all.py
 
+      # 美股選股欄位（EPS、PEG、營收成長、自由現金流率、Rule of 40）：SEC XBRL frames，一次拿全部公司，約 50 個請求
+      - name: 更新美股選股 screener-us.json
+        if: github.event.schedule == '0 22 * * 1-5' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: python scripts/build_us_screener.py
+
       # 全台股現金流量：FinMind 逐檔，每次輪流更新最久沒更新的 450 檔（約 5 天輪完）
       - name: 輪流更新現金流量 all/cashflow.json
         if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch'

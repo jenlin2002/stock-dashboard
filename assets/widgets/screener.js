@@ -1,7 +1,7 @@
 // 區塊：選股器表格（A 版）。快速條件 chip 可以多選（同時符合），欄位：代號、名稱、股價、漲跌、EPS(4Q)、本益比、PEG、ROE、殖利率、訊號、＋自選。
 // 資料：全台股總表 data/all/stocks.json（每天收盤後更新）。PEG 沒有時用推估 PEG（營收成長）。
 // EPS 連 3 季成長、外資連買、站上季線、融資減股價漲：用 data/screener-tw.json（第 7 步，每天收盤後更新）；檔案還沒有時灰掉。
-// 美股：目前只有 Nasdaq 選股器的價格、市值、產業（us_stocks.json），EPS／PEG 等待補。
+// 美股：Nasdaq 選股器的價格、市值、產業＋SEC 財報算的 EPS、本益比、PEG、營收成長、自由現金流率、Rule of 40（data/screener-us.json）。
 // 參數：market "tw"|"us"|"both"（both 用台股）、rows 一次顯示幾列（預設 30）
 (function () {
   const isNum = (x) => App.isNum(x);
@@ -45,6 +45,12 @@
       { k: "code", t: "代號", l: true, s: "str" }, { k: "name", t: "名稱", l: true, s: "str" },
       { k: "close", t: "股價", f: (s) => (isNum(s.close) ? "$" + App.fmtPrice(s.close) : "—") },
       { k: "change_pct", t: "漲跌", f: (s) => '<span class="' + App.upDown(s.change_pct) + '">' + App.fmtPct(s.change_pct, true) + "</span>" },
+      { k: "eps_ttm", t: "EPS(4Q)", f: (s) => App.fmtNum(s.eps_ttm, 2) },
+      { k: "pe", t: "本益比", asc: true, f: (s) => App.fmtNum(s.pe, 1) },
+      { k: "_peg", t: "PEG", asc: true, f: (s) => App.fmtNum(s.peg, 2) },
+      { k: "rev_growth", t: "營收成長", f: (s) => '<span class="' + App.upDown(s.rev_growth) + '">' + App.fmtPct(s.rev_growth, true) + "</span>" },
+      { k: "fcf_margin", t: "自由現金流率", f: (s) => (isNum(s.fcf_margin) ? App.fmtNum(s.fcf_margin, 1) + "%" : "—") },
+      { k: "rule40", t: "Rule of 40", f: (s) => (isNum(s.rule40) ? '<b class="' + (s.rule40 >= 40 ? "up" : "") + '">' + App.fmtNum(s.rule40, 0) + "</b>" : "—") },
       { k: "mktcap", t: "市值", f: (s) => (isNum(s.mktcap) ? "$" + App.fmtNum(s.mktcap / 1e9, 1) + "B" : "—") },
       { k: "sector", t: "產業", l: true, s: "str", f: (s) => App.esc(s.sector || "—") },
     ],
@@ -68,7 +74,8 @@
         : CHIPS.map((c) => '<button type="button" class="chip" data-k="' + c.k + '" aria-pressed="' + st.on.has(c.k) + '"' +
           (c.data && !has ? ' disabled title="需要選股器資料（data/screener-tw.json），排程跑過後才有"' : c.tip ? ' title="' + c.tip + '"' : "") + ">" + c.t + (c.data && !has ? "（待補）" : "") + "</button>").join("");
       const asof = q("asof");
-      if (asof) asof.textContent = (mk === "tw" ? "全台股總表 " + t.updated + (has ? "・均線 " + t.screener.price_date + "・法人 " + t.screener.inst_date + "・EPS " + t.screener.eps_quarter : "") : "Nasdaq 選股器 " + t.updated) + "（收盤後更新）";
+      if (asof) asof.textContent = (mk === "tw" ? "全台股總表 " + t.updated + (has ? "・均線 " + t.screener.price_date + "・法人 " + t.screener.inst_date + "・EPS " + t.screener.eps_quarter : "")
+        : "Nasdaq 選股器 " + t.updated + (t.fundamentals ? "・SEC 財報到 " + t.fundamentals.quarter : "")) + "（收盤後更新）";
       let rows = t.rows.filter((s) => isNum(s.close));
       for (const k of st.on) { const c = CHIPS.find((x) => x.k === k); if (c && c.f && (!c.data || has)) rows = rows.filter(c.f); }
       const cols = COLS[mk];

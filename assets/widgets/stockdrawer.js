@@ -19,7 +19,7 @@
       let item, d, s = null, f = null;
       try { item = await Data.item(cur.market === "both" ? null : cur.market, cur.symbol); d = await Data.stock(item); } catch (e) { if (my === seq) el.innerHTML = '<p class="note">— 讀不到 ' + App.esc(cur.symbol) + "（" + App.esc(e.message) + "）</p>"; return; }
       const m = App.marketOf(item), code = App.symbolOf(item).toUpperCase();
-      if (m === "tw") { try { const t = await Data.twAll(); s = t.by.get(code) || null; f = Scoring.faces(t.rows).get(code) || null; } catch (e) {} }
+      try { const t = await (m === "tw" ? Data.twAll() : Data.usAll()); s = t.by.get(code) || null; f = Scoring.faces(t.rows).get(code) || null; } catch (e) {}
       if (my !== seq) return;
       const p = d.price, n = p.close.length, c = p.close[n - 1], ch = n > 1 ? (c / p.close[n - 2] - 1) * 100 : null;
       const name = (s && s.name) || d.name || item.name;
@@ -30,7 +30,7 @@
         '<div><b class="sf-px ' + App.upDown(ch) + '">' + (m === "us" ? "$" : "") + App.fmtPrice(c) + '</b> <span class="' + App.upDown(ch) + '">' + App.fmtPct(ch, true) + '</span> <span class="updated">' + p.dates[n - 1] + "</span></div></div>" +
         spark(p.close.slice(-120)) + '<p class="updated dr-cap">近 120 個交易日</p>' +
         '<div class="dr-rings">' + Scoring.LABELS.map(([k, t]) => Scoring.ring({ fund: "基本面", value: "評價", tech: "技術面", chip: "籌碼面" }[k], f ? f[k] : null)).join("") + "</div>" +
-        '<p class="updated dr-cap">四面評分 0–100（全市場百分位，公式見頁尾）' + (m === "us" ? "；美股評分待補" : "") + "</p>" +
+        '<p class="updated dr-cap">四面評分 0–100（全市場百分位，公式見頁尾）' + (m === "us" ? "；美股沒有技術面、籌碼面資料" : "") + "</p>" +
         '<div class="dr-act"><button type="button" class="btn primary" data-act="fav">★ 加入自選</button> <a class="btn" href="stock.html?symbol=' + encodeURIComponent(code) + "&m=" + m + '">完整個股頁 →</a></div>' +
         '<h4 class="dr-h">本益成長比評分卡</h4><div data-c="peg"></div>' +
         '<h4 class="dr-h">技術重點</h4><div class="sf-card">' + tech + "</div>" +

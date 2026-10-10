@@ -31,7 +31,23 @@
       } catch (e) { t.screener = null; }  // 還沒有選股器資料：相關條件顯示待補
       return t;
     }),
-    usAll: () => Data.table("data/all/us_stocks.json"),
+    // 全美股（Nasdaq 選股器的價格、市值、產業）＋美股選股欄位（data/screener-us.json：SEC 財報算的 EPS、PEG、營收成長、自由現金流率、Rule of 40）
+    usAll: () => once("usAll", async () => {
+      const t = await Data.table("data/all/us_stocks.json");
+      try {
+        const sc = await App.loadJSON("data/screener-us.json");
+        const idx = new Map(sc.fields.map((f, i) => [f, i]));
+        const by = new Map(sc.rows.map((r) => [r[0], r]));
+        t.rows.forEach((s) => {
+          const r = by.get(s.code);
+          if (!r) return;
+          for (const [f, i] of idx) if (f !== "code") s[f] = r[i];
+          s.rev_yoy = s.rev_growth;  // 四面評分的基本面用同一個欄位名
+        });
+        t.fundamentals = { updated: sc.updated, quarter: sc.quarter };
+      } catch (e) { t.fundamentals = null; }
+      return t;
+    }),
     market: () => Data.json("data/market.json"),
     watchlist: () => once("watchlist", () => App.loadWatchlist()),
     groups: () => once("groups", async () => App.loadGroups(await Data.watchlist())),
