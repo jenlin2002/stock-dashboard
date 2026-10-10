@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>台美股看盤</title>
+<script>
+// 主頁（LAYOUT-SPEC.md 第 3 節）。先處理轉址，畫面還沒畫就轉走：
+// 1. 舊的「我的追蹤」網址 index.html#hold、#tw、#us、#g3 → watchlist.html（同一個 #）
+// 2. 勾了「記住」且有上次的版面 → 直接進該版；網址有 ?home=1（頁首「主頁」按鈕）就停在主頁
+(function () {
+  var h = location.hash;
+  if (/^#(hold|tw|us|g\d+)$/.test(h)) { location.replace("watchlist.html" + h); return; }
+  if (/(^|[?&])home=1(&|$)/.test(location.search.slice(1))) return;
+  try {
+    var L = localStorage.getItem("sd.layout");
+    if (localStorage.getItem("sd.rememberLayout") !== "false" && /^[abc]$/.test(L || "")) location.replace("layout-" + L + ".html" + location.search);
+  } catch (e) {}
+})();
+try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1><a href="index.html?home=1">台美股看盤</a></h1>
+  <nav><a href="watchlist.html">追蹤清單</a><a href="compare.html">比較</a></nav>
+</header>
+<div class="home-strip" id="strip" aria-label="大盤"></div>
+
+<main class="wide home">
+  <h2 class="home-title">今天想怎麼看盤？</h2>
+  <p class="updated home-sub">三種版面用同一份資料，隨時可以從頁首右上角的「主頁｜A｜B｜C」切換。</p>
+
+  <div class="home-cards">
+    <article class="home-card">
+      <div class="thumb thumb-a" aria-hidden="true">
+        <i class="t-bar"></i><i class="t-tape"></i>
+        <div class="t-body"><div class="t-main"><i class="t-kpi"></i><i class="t-kpi"></i><i class="t-kpi"></i><i class="t-chart"></i><i class="t-heat"></i><i class="t-table"></i></div><div class="t-side"><i></i><i></i><i></i></div></div>
+      </div>
+      <h3>A 指揮中心</h3>
+      <p>深色、一頁看完：指數、K 線、類股熱力圖、選股器和自選股都在同一個畫面。</p>
+      <p class="fit"><b>適合：</b>盤中盯盤、想一眼掌握全局</p>
+      <ul>
+        <li>指數跑馬燈＋6 格 KPI（加權、成交金額、漲跌家數、法人、融資、基差）</li>
+        <li>大盤 K 線（均線、扣抵、RSI、DMI）＋類股熱力圖</li>
+        <li>選股器表格：快速條件一鍵篩選，直接「＋自選」</li>
+        <li>右欄固定：法人籌碼、自選股（庫存股／自選）、本週行事曆</li>
+      </ul>
+      <a class="btn primary home-go" href="layout-a.html" data-l="a">進入 A 指揮中心</a>
+    </article>
+
+    <article class="home-card">
+      <div class="thumb thumb-b" aria-hidden="true">
+        <i class="t-bar"></i><i class="t-tabs"></i>
+        <div class="t-row"><i></i><i></i></div><i class="t-rank"></i><div class="t-row"><i></i><i></i><i></i><i></i></div>
+      </div>
+      <h3>B 分頁工作台</h3>
+      <p>淺色、用分頁整理：總覽、大盤、類股、基本面、技術面、籌碼面、選股器、自選股、行事曆。</p>
+      <p class="fit"><b>適合：</b>盤後研究、一次專心看一個面向</p>
+      <ul>
+        <li>總覽：台股、美股大盤卡並排</li>
+        <li>類股輪動排行（今日／5 日／20 日／美股）</li>
+        <li>個股四面分析（基本面、評價、技術面、籌碼面）</li>
+        <li>選股器（左條件、右結果）＋自選股損益表</li>
+      </ul>
+      <a class="btn primary home-go" href="layout-b.html" data-l="b">進入 B 工作台</a>
+    </article>
+
+    <article class="home-card">
+      <div class="thumb thumb-c" aria-hidden="true">
+        <i class="t-bar"></i>
+        <div class="t-cols"><div class="t-nav"><i></i><i></i><i></i><i></i></div><div class="t-mid"><i class="t-mk"></i><div class="t-strat"><i></i><i></i><i></i></div><i class="t-funnel"></i><i class="t-list"></i></div><div class="t-drawer"><i></i><i></i><i></i></div></div>
+      </div>
+      <h3>C 選股漏斗</h3>
+      <p>三欄：左邊導覽與自選清單，中間策略和篩選漏斗，右邊點一檔就打開個股抽屜。</p>
+      <p class="fit"><b>適合：</b>找標的、用策略一層一層篩</p>
+      <ul>
+        <li>策略卡：成長 GARP、穩定存股、籌碼集中、技術突破…</li>
+        <li>篩選漏斗：每一層顯示還剩幾檔</li>
+        <li>結果列：四面評分圓點、PEG、☆ 自選、匯出 CSV</li>
+        <li>個股抽屜：走勢、PEG 評分卡、均線扣抵、RSI、ADX</li>
+      </ul>
+      <a class="btn primary home-go" href="layout-c.html" data-l="c">進入 C 選股</a>
+    </article>
+  </div>
+
+  <label class="home-remember"><input type="checkbox" id="remember"> 下次打開網站，直接進入上次選的版面（只存在這台裝置）</label>
+
+  <section class="panel home-map">
+    <h3>現有功能在哪裡</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="l">功能</th><th class="l">A 指揮中心</th><th class="l">B 分頁工作台</th><th class="l">C 選股漏斗</th></tr></thead>
+        <tbody>
+          <tr><td class="l">大盤（加權、櫃買、台指期、法人、融資）</td><td class="l">主區 KPI 卡＋大盤 K 線</td><td class="l">「總覽」大盤卡、「大盤」分頁</td><td class="l">中欄頂部雙市場列</td></tr>
+          <tr><td class="l">類股（熱力圖、資金流向）</td><td class="l">主區類股熱力圖</td><td class="l">「類股」分頁、輪動排行</td><td class="l">左欄導覽「類股熱力圖」</td></tr>
+          <tr><td class="l">全台股總表</td><td class="l">選單 → 全台股總表</td><td class="l">「基本面」分頁</td><td class="l">篩選漏斗的第一層（全部）</td></tr>
+          <tr><td class="l">個股分析（PEG 評分卡、K 線、扣抵）</td><td class="l">選單 → 個股分析</td><td class="l">「總覽」個股四面分析</td><td class="l">右欄個股抽屜</td></tr>
+          <tr><td class="l">選股器</td><td class="l">主區選股器表格（快速條件）</td><td class="l">「選股器」分頁</td><td class="l">中欄策略卡＋篩選漏斗</td></tr>
+          <tr><td class="l">我的追蹤（庫存股、自選、匯入／匯出）</td><td class="l">右欄自選股</td><td class="l">「自選股」分頁</td><td class="l">左欄自選清單</td></tr>
+          <tr><td class="l">比較表</td><td class="l">選單 → 比較表</td><td class="l">「自選股」分頁的連結</td><td class="l">左欄導覽 → 比較表</td></tr>
+          <tr><td class="l">行事曆（資料待補）</td><td class="l">右欄本週行事曆</td><td class="l">「行事曆」分頁</td><td class="l">左欄導覽 → 行事曆</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">原本的頁面（大盤、全台股總表、個股分析、我的追蹤、比較表）都還在左側選單，三種版面只是另外的排法。</p>
+  </section>
+</main>
+
+<footer>
+  資料僅供參考，不構成投資建議。資料來源：TradingView、FinMind、公開資訊觀測站、SEC、Yahoo Finance。
+</footer>
+
+<script src="assets/app.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/layout-switch.js"></script>
+<script src="assets/search.js"></script>
+<script>
+(async function () {
+  // 「記住」勾選框：預設勾
+  const cb = document.getElementById("remember");
+  cb.checked = LayoutSwitch.store.get("sd.rememberLayout") !== "false";
+  cb.addEventListener("change", () => LayoutSwitch.store.set("sd.rememberLayout", cb.checked ? "true" : "false"));
+  // 進入按鈕帶著目前的市場、股票（從網址來的話）
+  document.querySelectorAll(".home-go").forEach((a) => a.addEventListener("click", () => { a.href = LayoutSwitch.hrefOf(a.dataset.l); }));
+
+  // 大盤列：加權、櫃買（data/market.json）、台積電 ADR、美元／台幣（即時，api/quotes）
+  const strip = document.getElementById("strip");
+  const isNum = App.isNum;
+  const cell = (name, val, chg, pct, note) => '<div class="hs-cell"><span class="hs-name">' + name + "</span>" +
+    '<b class="' + App.upDown(chg) + '">' + val + '</b><span class="' + App.upDown(chg) + '">' + (isNum(chg) ? (chg > 0 ? "+" : chg < 0 ? "−" : "") + App.fmtNum(Math.abs(chg), 2) + "（" + App.fmtPct(pct, true) + "）" : "—") + "</span>" +
+    (note ? '<span class="hs-note">' + note + "</span>" : "") + "</div>";
+  const out = [];
+  try {
+    const m = await App.loadJSON("data/market.json");
+    for (const [k, name] of [["taiex", "加權指數"], ["otc", "櫃買指數"]]) {
+      const s = m[k], n = s ? s.close.length : 0;
+      if (n < 2) { out.push(cell(name, "—", null, null, "沒有資料")); continue; }
+      const c = s.close[n - 1], p = s.close[n - 2];
+      out.push(cell(name, App.fmtNum(c, 2), c - p, (c / p - 1) * 100, s.dates[n - 1].slice(5)));
+    }
+  } catch (e) { out.push(cell("加權指數", "—", null, null, "讀不到 market.json")); }
+  strip.innerHTML = out.join("");
+  try {
+    const q = await App.loadJSON("api/quotes?set=tw");
+    strip.insertAdjacentHTML("beforeend", q.quotes.filter((x) => x.key !== "TWII").map((x) =>
+      cell(x.name, isNum(x.price) ? App.fmtNum(x.price, x.key === "TWD" ? 3 : 2) : "—", x.change, x.change_pct, isNum(x.price) ? x.time : "暫時抓不到")).join(""));
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
