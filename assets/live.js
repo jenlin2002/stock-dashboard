@@ -52,13 +52,13 @@
     };
   }
 
-  // 日線加上今天這一根（今天的資料還沒進排程檔時新增，已有就換掉）。volMul：報價的量要乘多少才跟日線同單位
+  // 日線加上今天這一根（只在排程檔還沒有今天時才加）。volMul：報價的量要乘多少才跟日線同單位
+  // 排程檔已經有這天就不換：收盤後的官方資料量比較完整（含盤後定價、鉅額交易；富果的盤中量不含）
   function mergeDaily(price, q, volMul) {
     if (!price || !price.dates.length || !q || q.open == null || q.price == null || !q.date) return price;
     const n = price.dates.length, last = price.dates[n - 1];
-    if (q.date < last) return price;
-    const keep = q.date === last ? n - 1 : n;
-    const cut = (a) => a.slice(0, keep);
+    if (q.date <= last) return price;
+    const cut = (a) => a.slice(0, n);
     const vol = q.index ? q.value : q.vol;
     return {
       dates: cut(price.dates).concat([q.date]), open: cut(price.open).concat([q.open]),
