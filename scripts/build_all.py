@@ -161,11 +161,14 @@ def profile_of(x, market):
             v = x.get(PROFILE_TW[f])
         else:
             inc, exc = PROFILE_TPEX[f]
+            cands = []
             for k in keys:
                 nk = "".join(c for c in k.lower() if c.isalpha())
-                if any(w in nk for w in inc) and not any(w in nk for w in exc):
-                    v = x[k]
-                    break
+                if any(w in nk for w in inc) and not any(w in nk for w in exc) and str(x[k] or "").strip():
+                    cands.append(x[k])
+            # 同時有中英文版（例：地址）時用中文
+            cjk = [c for c in cands if any("\u4e00" <= ch <= "\u9fff" for ch in str(c))]
+            v = (cjk or cands or [None])[0]
         if f in ("founded", "listed"):
             v = fmt_date(v)
         elif f == "capital":
