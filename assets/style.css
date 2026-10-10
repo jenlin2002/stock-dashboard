@@ -187,6 +187,11 @@ body.lp > footer { max-width: 1680px; margin: 16px auto 0; padding: 16px 20px; }
 .cal-list { list-style: none; margin: 0; padding: 0 14px 6px; font-size: 14px; }
 .cal-list li { padding: 5px 0; border-bottom: 1px solid var(--border); }
 .w-cal .note, .w-cal .updated { padding: 0 14px; }
+.w-cal .w-head .cal-mine { margin-left: auto; padding: 0; display: inline-flex; gap: 4px; align-items: center; }
+.cal-list li.mine { font-weight: 600; }
+.cal-list a { color: var(--text); text-decoration: none; }
+.cal-list a:hover { color: var(--accent); }
+.cal-more { margin: 6px 14px; }
 .w-peg .note, .w-deduct .note { padding: 0 14px; }
 
 /* B 分頁工作台 */
