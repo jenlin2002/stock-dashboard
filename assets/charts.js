@@ -87,6 +87,8 @@
   // 回傳的 update(newPrice) 用來盤中即時更新：只換資料，不重建圖，保留目前的縮放位置（看著最新一根時會跟著往右）
   function kline(hosts, d, opts) {
     let p = d.price, n = p.dates.length, volArr = [];
+    const mine = [];  // 這張 K 線自己的圖（destroy 只清自己的，同一頁可以有好幾張）
+    const own = (c) => { klines.push(c); mine.push(c); return c; };
     const up = v("--up"), down = v("--down");
     const intraday = typeof p.dates[0] === "number";
     const s = maSettings();
@@ -101,7 +103,7 @@
 
     // ---- 價 ----
     const chart = LightweightCharts.createChart(hosts.price, chartOptions(ts(lastShown < 0)));
-    klines.push(chart);
+    own(chart);
     const candle = chart.addCandlestickSeries({
       upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down,
     });
@@ -114,7 +116,7 @@
     subs.forEach((type, idx) => {
       if (type === "none") return;
       const c = LightweightCharts.createChart(hosts.subs[idx], chartOptions(ts(idx === lastShown)));
-      klines.push(c);
+      own(c);
       const ref = (ser, lv, label) => ser.createPriceLine({ price: lv, color: v("--muted"), lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: !!label });
       let main, fillFn;
       if (type === "vol") {
@@ -309,7 +311,11 @@
       if (hoverIdx != null && tipPoint) showTip(hoverIdx, tipPoint);
     }
 
-    const ret = { values, volArr, ma: maList, volMa: volList, subs, indLegend, update, onCrosshair: (fn) => { listeners.push(fn); fn(n - 1); } };
+    function destroy() {
+      mine.forEach((c) => { const i = klines.indexOf(c); if (i >= 0) { klines.splice(i, 1); c.remove(); } });
+      mine.length = 0;
+    }
+    const ret = { values, volArr, ma: maList, volMa: volList, subs, indLegend, update, destroy, onCrosshair: (fn) => { listeners.push(fn); fn(n - 1); } };
     fill();
     setRange({ from: n - 130, to: n + 2 });  // 預設看近半年
     showDeduction(n - 1);
