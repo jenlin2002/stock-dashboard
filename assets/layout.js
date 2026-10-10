@@ -4,7 +4,7 @@
   // ready：false 表示頁面還沒做，顯示「建置中」
   const lastSymbol = (() => { try { return localStorage.getItem("last-symbol") || "2330"; } catch (e) { return "2330"; } })();
   const MENU = [
-    { icon: "📈", label: "大盤", href: "market.html", ready: false, subs: [["加權指數", "#index"], ["法人買賣超", "#inst"], ["融資融券", "#margin"]] },
+    { icon: "📈", label: "大盤", href: "market.html", ready: true, subs: [["台股大盤", "market.html#tw"], ["美股大盤", "market.html#us"]] },
     { icon: "💰", label: "類股資金流向", href: "flow.html", ready: false, subs: [["類股成交比重", "#share"], ["法人進出排行", "#rank"]] },
     { icon: "📋", label: "全台股總表", href: "all.html", ready: true, subs: [["依股號", "all.html"], ["依產業", "all.html?view=industry"]] },
     { icon: "🔍", label: "個股分析", href: "stock.html?symbol=" + encodeURIComponent(lastSymbol), page: "stock", ready: true,

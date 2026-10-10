@@ -161,7 +161,12 @@ all.html                     全台股總表頁（依股號、依產業）
 assets/layout.js             共用版面：左側選單＋右側內容
 functions/api/stock.js       Cloudflare Pages Function：即時查詢不在清單裡的股票
 functions/api/watchlist.js   Cloudflare Pages Function：網站上「＋／×」修改 GitHub 上的追蹤清單
-functions/api/intraday.js    Cloudflare Pages Function：分鐘 K 線（Yahoo 延遲報價）
+functions/api/intraday.js    Cloudflare Pages Function：分鐘 K 線、指數日線（Yahoo 延遲報價）
+functions/api/quotes.js      Cloudflare Pages Function：大盤頁的國際行情方塊
+data/market.json             大盤資料（scripts/build_market.py）
+market.html                  大盤頁（台股大盤／美股大盤，含熱力圖）
+data/all/us_stocks.json      全部美股價格、市值、產業（scripts/build_us_all.py，Nasdaq 選股器）
+assets/heatmap.js            熱力圖（treemap）
 data/all/cashflow.json       全台股現金流量快取（scripts/fetch_cashflow.py 每天輪流更新 450 檔）
 data/all/revenue_hist.json   近 13 個月月營收快取（公開資訊觀測站）
 assets/refs.js               本益成長比評分卡（REFS 五分位燈號）

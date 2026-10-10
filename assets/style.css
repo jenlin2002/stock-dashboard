@@ -266,6 +266,35 @@ tr.busy { opacity: .4; pointer-events: none; }
 .list-add { display: block; width: 100%; padding: 12px; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 14px; cursor: pointer; }
 .list-add:hover { color: var(--accent); background: var(--bg); }
 
+/* 大盤頁：行情方塊 */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.tile { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.t-name { font-size: 13px; color: var(--muted); }
+.t-val { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 2px 0; }
+.t-sub { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.tf-tabs .seg + .seg { margin-left: 6px; }
+
+/* 熱力圖 */
+.heat { position: relative; height: 560px; margin: 10px 14px 6px; background: #22252b; border-radius: 6px; overflow: hidden; }
+.hm-group { position: absolute; box-sizing: border-box; border: 1px solid #15171b; }
+.hm-gname { position: absolute; left: 0; right: 0; top: 0; height: 16px; padding: 0 4px; font-size: 11px; line-height: 16px; color: #d6d9de; background: #2c3038; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-tile {
+  position: absolute; box-sizing: border-box; border: 1px solid #15171b; color: #fff; text-decoration: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; text-align: center; line-height: 1.15;
+}
+.hm-tile:hover { outline: 2px solid #fff; z-index: 2; }
+.hm-tile b { font-weight: 600; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+.hm-tile span { font-size: .8em; opacity: .9; }
+.heat-legend { display: flex; justify-content: center; gap: 0; margin: 0 14px 12px; font-size: 11px; }
+.heat-legend span { flex: 0 1 60px; text-align: center; color: #fff; padding: 2px 0; }
+@media (max-width: 760px) { .heat { height: 420px; margin: 8px; } }
+@media (max-width: 760px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile { padding: 8px 10px; }
+  .t-val { font-size: 18px; }
+}
+.tf-tabs button:disabled { opacity: .4; cursor: not-allowed; }
+
 /* 首頁：上市股票用自己的資料畫的小卡 */
 .own-mini { display: flex; flex-direction: column; height: 100%; padding: 8px 14px 10px; }
 .own-mini .px { font-size: 26px; font-weight: 600; }

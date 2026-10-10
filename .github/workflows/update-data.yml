@@ -70,6 +70,20 @@ jobs:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
         run: python scripts/build_stocklist.py
 
+      # 大盤：加權、櫃買、台指期、三大法人、融資融券、期貨未平倉（FinMind，6 次請求）
+      - name: 更新大盤 market.json
+        if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: python scripts/build_market.py
+
+      # 全部美股價格、市值、產業（Nasdaq 選股器，一次一個請求）：美股熱力圖用，美股收盤後那次跑
+      - name: 更新全美股 all/us_stocks.json
+        if: github.event.schedule == '0 22 * * 1-5' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: python scripts/build_us_all.py
+
       # 全台股現金流量：FinMind 逐檔，每次輪流更新最久沒更新的 450 檔（約 5 天輪完）
       - name: 輪流更新現金流量 all/cashflow.json
         if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch'

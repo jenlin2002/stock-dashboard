@@ -28,7 +28,7 @@
 14. [x] **本人**：Fetch／Pull 後 commit + push（PHASE5V2）
 15. [x] **Claude Code**：Phase 7（查詢任何股票）（2026-10-09，見下方「Phase 7」）
 16. [ ] **本人**：在 Cloudflare 設定環境變數 `FINMIND_TOKEN`、`SEC_USER_AGENT`，然後 commit + push，到網站用搜尋框測試
-17. [ ] **Claude Code**：Phase 8 主畫面與全台股（見下方「Phase 8」），依序 ①～⑥（①②③ 完成；④ 大盤、⑤ 類股資金流向、⑥ 美股總表待做）
+17. [ ] **Claude Code**：Phase 8 主畫面與全台股（見下方「Phase 8」），依序 ①～⑥（①②③④ 完成；⑤ 類股資金流向、⑥ 美股總表待做）
 18. [x] **Claude Code**：首頁「＋」加入追蹤、「×」移除（2026-10-10，本人要求）：`functions/api/watchlist.js` 用 GitHub contents API 改 `config/watchlist.json`（檢查 Origin、代號格式；sha 衝突重試一次；台股依代號排序；排版與手寫相同），commit 後觸發排程。前端改完把新清單存在瀏覽器 15 分鐘（網站重新部署前也看得到）；剛加入、還沒資料檔的股票先即時查詢。已用模擬 GitHub API 測過加入、重複加入、移除、中文名稱、錯誤代號、別的網站來源、未設權杖。
 19. [x] **本人**：產生 fine-grained GitHub 權杖，存成 Cloudflare 環境變數 `GITHUB_TOKEN`（2026-10-10 完成）
 
@@ -387,6 +387,17 @@ stock-dashboard/
 - 清單模式改成表格（本人要求「跟全台股總表一樣欄位，多一個趨勢圖」）：欄位定義抽成共用的 `assets/stockcols.js`（`StockCols.tw()`、`StockCols.us()`），all.html 與 index.html 都用它，兩邊永遠一致；清單在「漲跌」後多一欄「近一年走勢」小圖。台股資料來自 `data/all/stocks.json`，美股來自 `data/summary.json`（美股沒有全市場總表，欄位較少）。可點標題排序、點列進個股、右邊 × 移除、最下面「＋ 加入」。
 
 **深色／淺色切換（2026-10-10，本人要求）**：頁首右邊 🌙／☀️ 按鈕，選擇存在 localStorage `theme`，沒選就跟系統；各頁 `<head>` 先套用避免閃爍；圖表與 TradingView 元件跟著重畫（`App.onThemeChange` 同時聽手動切換與系統改變）。
+
+**④ 大盤完成（2026-10-10）**：`market.html`，分「台股大盤／美股大盤」兩個分頁（`#tw`／`#us`）。
+- 台股：`scripts/build_market.py` → `data/market.json`（FinMind：加權 TAIEX、櫃買 TPEx 日 K＋成交金額；台指期 TX 一般時段、每天取成交量最大的單一月份契約；三大法人現貨買賣超；融資餘額（元）、融券餘額（張）；三大法人台指期淨未平倉口數）。增量更新，K 線 5 年、其他 1 年；排程台股那次跑。
+  - 方塊：加權、櫃買、台指期（基差＝期貨−現貨）、上市＋上櫃成交金額（比 5 日均）、漲跌家數與漲跌停（全台股總表）、三大法人、外資期貨淨未平倉、融資餘額、台積電 ADR、美元兌台幣。
+  - K 線：加權／櫃買／台指期切換，含量（指數＝成交金額億元、台指期＝口），套用個股頁的 MA、扣抵、副圖設定。加權有 1～60 分（Yahoo ^TWII，沒有盤中量）；櫃買、台指期只有日週月（沒有免費盤中資料，按鈕停用）。
+  - 圖表：三大法人買賣超（20 日）、台指期淨未平倉（60 日）、融資融券餘額（120 日）。
+- 美股（本人要求「各大工業指數，同樣台美股要區分」）：K 線道瓊、那斯達克、標普 500、費半、羅素 2000（`functions/api/intraday.js` 擴充 `market=idx`，白名單代號，tf 可為 D＝日線 5 年或 1～60 分）；方塊 `functions/api/quotes.js?set=us`：五大指數、VIX、10 年期公債殖利率、美元指數、美元兌台幣、黃金、原油、台積電 ADR（快取 2 分鐘）。
+
+**熱力圖（2026-10-10，本人追加）**：大盤頁兩個分頁各一張，`assets/heatmap.js`（squarified treemap，方塊＝市值、顏色＝漲跌，紅漲綠跌，依產業分區，點方塊進個股；深底白字不隨主題變）。
+- 台股：`data/all/stocks.json`，前 100／前 300／全部、上市＋上櫃／上市／上櫃；顏色 ±5% 飽和。
+- 美股：`scripts/build_us_all.py` → `data/all/us_stocks.json`（Nasdaq 選股器 `api.nasdaq.com/api/screener/stocks`，一次拿全部美股 ~5,800 檔：價格、漲跌、成交量、市值、產業 sector/industry、國家；排除特別股、權證；免 key），前 100／300／500 大；顏色 ±3% 飽和。美股收盤後那次排程跑。這份資料也可作為 ⑥ 美股總表的基礎。
 
 **⑥ 美股總表（本人追加，待規劃）**：選單加「美股總表」，類似全台股總表。需找美股全部股票的批次來源（候選：SEC frames API 一次拿某季全部公司的營收／EPS；股價與市值另找），規劃後再做。
 

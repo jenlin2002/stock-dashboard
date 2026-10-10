@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>大盤｜台美股看盤</title>
+<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1><a href="index.html">台美股看盤</a></h1>
+  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
+</header>
+
+<main class="wide">
+  <div class="toolbar">
+    <div class="seg mk-tabs" role="tablist" aria-label="市場">
+      <button type="button" role="tab" data-mk="tw">台股大盤</button>
+      <button type="button" role="tab" data-mk="us">美股大盤</button>
+    </div>
+    <span class="updated" id="asof"></span>
+  </div>
+
+  <!-- 台股大盤 -->
+  <section id="pane-tw" role="tabpanel">
+    <div class="tiles" id="tw-tiles"></div>
+    <section class="panel" id="p-heat-tw">
+      <h3>台股熱力圖 <span class="updated">方塊大小＝市值、顏色＝今日漲跌（紅漲綠跌）、依產業分區；點方塊進個股</span></h3>
+      <div class="tf-tabs"><span class="seg" id="tw-heat-n"></span> <span class="seg" id="tw-heat-mk"></span></div>
+      <div class="heat" id="tw-heat"></div>
+      <div class="heat-legend" id="tw-heat-legend"></div>
+    </section>
+    <section class="panel" id="p-k">
+      <h3 id="tw-title">K 線</h3>
+      <div class="tf-tabs"><span class="seg" id="tw-src"></span> <span class="seg" id="tw-tf"></span> <span class="seg" id="tw-sub-btns"></span></div>
+      <div class="klegend" id="tw-legend"></div>
+      <div class="body chart-body" id="tw-chart"></div>
+      <div class="body sub-body" id="tw-sub"></div>
+      <p class="note" id="tw-note"></p>
+    </section>
+    <div class="two-col charts-2">
+      <section class="panel" id="p-inst">
+        <h3>三大法人現貨買賣超（億元，近 20 日）</h3>
+        <div class="body canvas-body"><canvas id="c-inst"></canvas></div>
+      </section>
+      <section class="panel" id="p-fut">
+        <h3>三大法人台指期淨未平倉（口，近 60 日）</h3>
+        <div class="body canvas-body"><canvas id="c-fut"></canvas></div>
+        <p class="note">淨未平倉＝多單 − 空單；正數偏多、負數偏空。外資用長條，投信、自營商用折線。</p>
+      </section>
+    </div>
+    <section class="panel" id="p-margin">
+      <h3>融資餘額（億元）與融券餘額（張），近 120 日</h3>
+      <div class="body canvas-body"><canvas id="c-margin"></canvas></div>
+    </section>
+  </section>
+
+  <!-- 美股大盤 -->
+  <section id="pane-us" role="tabpanel" hidden>
+    <div class="tiles" id="us-tiles"></div>
+    <section class="panel" id="p-heat-us">
+      <h3>美股熱力圖 <span class="updated">方塊大小＝市值、顏色＝最近一個交易日漲跌（紅漲綠跌）、依產業分區；點方塊進個股</span></h3>
+      <div class="tf-tabs"><span class="seg" id="us-heat-n"></span></div>
+      <div class="heat" id="us-heat"></div>
+      <div class="heat-legend" id="us-heat-legend"></div>
+      <p class="note" id="us-heat-note"></p>
+    </section>
+    <section class="panel">
+      <h3 id="us-title">K 線</h3>
+      <div class="tf-tabs"><span class="seg" id="us-src"></span> <span class="seg" id="us-tf"></span> <span class="seg" id="us-sub-btns"></span></div>
+      <div class="klegend" id="us-legend"></div>
+      <div class="body chart-body" id="us-chart"></div>
+      <div class="body sub-body" id="us-sub"></div>
+      <p class="note">Yahoo Finance 延遲報價；成交量為股數（費城半導體指數沒有成交量）。日線 5 年，週、月線由日線合併。</p>
+    </section>
+  </section>
+</main>
+
+<footer>
+  資料僅供參考，不構成投資建議。資料來源：FinMind（臺灣證券交易所、證券櫃檯買賣中心、臺灣期貨交易所）、Yahoo Finance。
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="assets/app.js"></script>
+<script src="assets/layout.js"></script>
+<script src="assets/search.js"></script>
+<script src="assets/indicators.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/heatmap.js"></script>
+<script>
+(async function () {
+  const isNum = App.isNum, yi = (x) => (isNum(x) ? x / 1e8 : null);
+  const fmt = (x, d) => App.fmtNum(x, d == null ? 2 : d);
+  const signed = (x, d) => (isNum(x) ? (x > 0 ? "+" : "") + App.fmtNum(x, d == null ? 2 : d) : "—");
+
+  // K 線指標設定沿用個股頁（MA、扣抵、副圖）
+  let kopts = { ma: Charts.MAS.slice(), deduct: true, sub: "dmi" };
+  try { kopts = Object.assign(kopts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
+  kopts.ma = Charts.MAS.filter((x) => (kopts.ma || []).includes(x));
+
+  let m = {};
+  try { m = await App.loadJSON("data/market.json"); } catch (e) {}
+
+  // ---------- 方塊 ----------
+  function tile(name, val, sub, cls, title) {
+    return '<div class="tile"' + (title ? ' title="' + App.esc(title) + '"' : "") + '><div class="t-name">' + name + '</div><div class="t-val ' + (cls || "") + '">' + val + '</div><div class="t-sub">' + (sub || "") + "</div></div>";
+  }
+  function lastTwo(s) {
+    const n = s ? s.close.length : 0;
+    return n >= 2 ? { c: s.close[n - 1], p: s.close[n - 2], v: s.volume[n - 1], d: s.dates[n - 1], i: n - 1 } : null;
+  }
+  function chgTile(name, s, volLabel) {
+    const x = lastTwo(s);
+    if (!x) return tile(name, "—");
+    const chg = x.c - x.p, pct = chg / x.p * 100;
+    return tile(name, fmt(x.c), '<span class="' + App.upDown(chg) + '">' + signed(chg) + "（" + App.fmtPct(pct, true) + "）</span>" + (volLabel ? "<br>" + volLabel(x) : ""), App.upDown(chg));
+  }
+
+  async function renderTwTiles() {
+    const h = [];
+    const t = m.taiex, o = m.otc, tx = m.tx;
+    h.push(chgTile("加權指數", t, (x) => "成交 " + fmt(yi(x.v), 0) + " 億"));
+    h.push(chgTile("櫃買指數", o, (x) => "成交 " + fmt(yi(x.v), 0) + " 億"));
+    // 台指期：基差＝期貨 − 現貨（同一天）
+    const tl = lastTwo(t), xl = lastTwo(tx);
+    const basis = tl && xl && tl.d === xl.d ? xl.c - tl.c : null;
+    h.push(chgTile("台指期 " + ((tx && tx.contract) || ""), tx, (x) => "量 " + fmt(x.v, 0) + " 口・基差 " + '<span class="' + App.upDown(basis) + '">' + signed(basis, 0) + "</span>"));
+    // 成交金額：上市＋上櫃，和 5 日均量比
+    if (tl) {
+      const sum = (s, i) => (s.volume[i] || 0);
+      const n = t.volume.length, tot = sum(t, n - 1) + (o ? sum(o, o.volume.length - 1) : 0);
+      let avg = 0;
+      for (let i = 1; i <= 5; i++) avg += sum(t, n - 1 - i) + (o ? sum(o, o.volume.length - 1 - i) : 0);
+      avg /= 5;
+      h.push(tile("上市＋上櫃成交金額", fmt(yi(tot), 0) + " 億", "5 日均 " + fmt(yi(avg), 0) + " 億（" + App.fmtPct((tot / avg - 1) * 100, true) + "）"));
+    }
+    // 漲跌家數：全台股總表
+    try {
+      const a = await App.loadJSON("data/all/stocks.json");
+      const ic = a.fields.indexOf("change_pct");
+      const ch = a.rows.map((r) => r[ic]).filter(isNum);
+      const up = ch.filter((x) => x > 0).length, down = ch.filter((x) => x < 0).length;
+      const lu = ch.filter((x) => x >= 9.5).length, ld = ch.filter((x) => x <= -9.5).length;
+      h.push(tile("漲跌家數（上市＋上櫃）", '<span class="up">' + up + '</span>／<span class="down">' + down + "</span>", "平盤 " + (ch.length - up - down) + "・漲停 " + lu + "・跌停 " + ld));
+    } catch (e) {}
+    // 三大法人
+    const inst = (m.inst || [])[(m.inst || []).length - 1];
+    if (inst) {
+      const tot = inst.foreign + inst.trust + inst.dealer;
+      h.push(tile("三大法人買賣超（" + inst.date.slice(5) + "）", '<span class="' + App.upDown(tot) + '">' + signed(yi(tot), 1) + " 億</span>",
+        "外資 " + signed(yi(inst.foreign), 1) + "・投信 " + signed(yi(inst.trust), 1) + "・自營 " + signed(yi(inst.dealer), 1)));
+    }
+    // 外資台指期淨未平倉
+    const fo = m.fut_oi || [];
+    if (fo.length >= 2) {
+      const a = fo[fo.length - 1], b = fo[fo.length - 2];
+      h.push(tile("外資台指期淨未平倉", '<span class="' + App.upDown(a.foreign) + '">' + signed(a.foreign, 0) + " 口</span>", "較前日 " + signed(a.foreign - b.foreign, 0) + " 口"));
+    }
+    // 融資餘額
+    const mg = m.margin || [];
+    if (mg.length >= 2) {
+      const a = mg[mg.length - 1], b = mg[mg.length - 2];
+      h.push(tile("融資餘額", fmt(yi(a.margin), 0) + " 億", "較前日 " + '<span class="' + App.upDown(a.margin - b.margin) + '">' + signed(yi(a.margin - b.margin), 1) + " 億</span>・融券 " + fmt(a.short, 0) + " 張"));
+    }
+    document.getElementById("tw-tiles").innerHTML = h.join("");
+    // 即時：台積電 ADR、美元兌台幣
+    try {
+      const q = await App.loadJSON("api/quotes?set=tw");
+      document.getElementById("tw-tiles").insertAdjacentHTML("beforeend", q.quotes.filter((x) => x.key !== "TWII").map(quoteTile).join(""));
+    } catch (e) {}
+  }
+  function quoteTile(x) {
+    if (!isNum(x.price)) return tile(x.name, "—", "暫時抓不到");
+    const d = x.key === "TWD" || x.key === "TNX" || x.key === "VIX" ? 3 : 2;
+    return tile(x.name, fmt(x.price, d), '<span class="' + App.upDown(x.change) + '">' + signed(x.change, d) + "（" + App.fmtPct(x.change_pct, true) + "）</span><br>" + x.time, App.upDown(x.change));
+  }
+  async function renderUsTiles() {
+    const host = document.getElementById("us-tiles");
+    host.innerHTML = '<p class="note">讀取中…</p>';
+    try {
+      const q = await App.loadJSON("api/quotes?set=us");
+      host.innerHTML = q.quotes.map(quoteTile).join("");
+    } catch (e) { host.innerHTML = '<p class="note">國際行情暫時抓不到。</p>'; }
+  }
+
+  // ---------- K 線（共用：台股、美股各一組） ----------
+  const TFS = [["1", "1分"], ["5", "5分"], ["15", "15分"], ["30", "30分"], ["60", "60分"], ["D", "日"], ["W", "週"], ["M", "月"]];
+  const toYi = (s) => Object.assign({}, s, { volume: s.volume.map((v) => (isNum(v) ? Math.round(v / 1e8) : 0)) });  // 成交金額 元 → 億
+  const SOURCES = {
+    tw: [
+      { key: "TWII", name: "加權指數", unit: "億", minute: true, daily: () => toYi(m.taiex) },
+      { key: "OTC", name: "櫃買指數", unit: "億", minute: false, daily: () => toYi(m.otc) },
+      { key: "TX", name: "台指期（主力）", unit: "口", minute: false, daily: () => m.tx },
+    ],
+    us: [
+      { key: "DJI", name: "道瓊工業" }, { key: "IXIC", name: "那斯達克" }, { key: "GSPC", name: "標普 500" },
+      { key: "SOX", name: "費城半導體" }, { key: "RUT", name: "羅素 2000" },
+    ].map((x) => Object.assign(x, { unit: "股", minute: true })),
+  };
+  const state = {};
+  ["tw", "us"].forEach((mk) => {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem("market-k-" + mk) || "{}"); } catch (e) {}
+    state[mk] = { src: SOURCES[mk].some((s) => s.key === saved.src) ? saved.src : SOURCES[mk][0].key, tf: TFS.some(([k]) => k === saved.tf) ? saved.tf : "D", cache: {}, seq: 0 };
+  });
+
+  async function seriesOf(mk, src, tf) {
+    const st = state[mk], key = src.key + ":" + tf;
+    if (st.cache[key]) return st.cache[key];
+    let p;
+    if (tf === "W" || tf === "M") p = Charts.aggregate(await seriesOf(mk, src, "D"), tf);
+    else if (tf === "D" && src.daily) p = src.daily();
+    else p = (await App.loadJSON("api/intraday?market=idx&symbol=" + src.key + "&tf=" + tf)).price;
+    if (!p || !p.dates || !p.dates.length) throw new Error("沒有資料");
+    return (st.cache[key] = p);
+  }
+
+  function renderControls(mk) {
+    const st = state[mk], src = SOURCES[mk].find((s) => s.key === st.src);
+    if (!src.minute && !"DWM".includes(st.tf)) st.tf = "D";
+    document.getElementById(mk + "-src").innerHTML = SOURCES[mk].map((s) => '<button type="button" data-src="' + s.key + '" aria-pressed="' + (s.key === st.src) + '">' + s.name + "</button>").join("");
+    document.getElementById(mk + "-tf").innerHTML = TFS.map(([k, t]) => {
+      const off = !src.minute && !"DWM".includes(k);
+      return '<button type="button" data-tf="' + k + '" aria-pressed="' + (k === st.tf) + '"' + (off ? ' disabled title="' + src.name + '沒有免費的盤中資料"' : "") + ">" + t + "</button>";
+    }).join("");
+    document.getElementById(mk + "-sub-btns").innerHTML = [["dmi", "DMI"], ["kd", "KD"], ["macd", "MACD"], ["none", "不顯示"]]
+      .map(([k, t]) => '<button type="button" data-sub="' + k + '" aria-pressed="' + (kopts.sub === k) + '">' + t + "</button>").join("");
+  }
+
+  async function drawK(mk) {
+    const st = state[mk], seq = ++st.seq;
+    const src = SOURCES[mk].find((s) => s.key === st.src);
+    renderControls(mk);
+    const tfName = TFS.find(([k]) => k === st.tf)[1];
+    document.getElementById(mk + "-title").textContent = src.name + " K 線（" + tfName + "）";
+    const lg = document.getElementById(mk + "-legend");
+    lg.innerHTML = "<span>讀取中…</span>";
+    let p;
+    try { p = await seriesOf(mk, src, st.tf); } catch (e) {
+      if (seq === st.seq) lg.innerHTML = '<span class="down">' + App.esc(e.message) + "</span>";
+      return;
+    }
+    if (seq !== st.seq) return;
+    Charts.destroyKlines();
+    const k = Charts.kline(document.getElementById(mk + "-chart"), document.getElementById(mk + "-sub"), { market: "IDX", price: p }, kopts);
+    const intraday = typeof p.dates[0] === "number";
+    k.onCrosshair((i) => {
+      const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
+      let html = "<span>" + Charts.timeLabel(p.dates[i]) + "</span><span>開 " + fmt(p.open[i]) + " 高 " + fmt(p.high[i]) + " 低 " + fmt(p.low[i]) +
+        ' 收 <b class="' + App.upDown(chg) + '">' + fmt(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
+      html += kopts.ma.map((x) => '<span style="color:' + Charts.MA_COLORS[x] + '">MA' + x + " " + fmt(k.values["MA" + x][i]) + "</span>").join("");
+      if (p.volume[i]) html += "<span>" + (src.unit === "億" ? "成交 " : "量 ") + App.fmtNum(p.volume[i], 0) + " " + src.unit + "</span>";
+      if (src.key === "TX" && p.oi) html += "<span>未平倉 " + App.fmtNum(p.oi[i], 0) + " 口</span>";
+      lg.innerHTML = html;
+    });
+    if (mk === "tw") {
+      document.getElementById("tw-note").textContent = intraday
+        ? "加權指數分鐘線：Yahoo Finance 延遲報價，沒有盤中成交量。"
+        : src.key === "TX" ? "台指期主力：每天取成交量最大的單一月份契約（一般交易時段，不含夜盤）；量為口數。櫃買指數、台指期沒有免費的分鐘資料。"
+        : "日線資料：FinMind（證交所、櫃買中心），量為成交金額（億元）；週、月線由日線合併。";
+    }
+  }
+
+  ["tw", "us"].forEach((mk) => {
+    const save = () => { try { localStorage.setItem("market-k-" + mk, JSON.stringify({ src: state[mk].src, tf: state[mk].tf })); } catch (e) {} };
+    document.getElementById(mk + "-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { state[mk].src = b.dataset.src; save(); drawK(mk); } });
+    document.getElementById(mk + "-tf").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.disabled) { state[mk].tf = b.dataset.tf; save(); drawK(mk); } });
+    document.getElementById(mk + "-sub-btns").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      kopts.sub = b.dataset.sub;
+      try { localStorage.setItem("kline-opts-v2", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("kline-opts-v2") || "{}"), { sub: kopts.sub }))); } catch (err) {}
+      drawK(mk);
+    });
+  });
+
+  // ---------- 台股：法人、期貨未平倉、融資融券 ----------
+  let cjs = [];
+  function drawTwCharts() {
+    cjs.forEach((c) => c.destroy());
+    cjs = [];
+    const v = App.cssVar;
+    Chart.defaults.color = v("--muted");
+    Chart.defaults.borderColor = v("--grid");
+    const base = { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { labels: { boxWidth: 12, boxHeight: 12 } } } };
+    const md = (d) => d.slice(5).replace("-", "/");
+    const inst = (m.inst || []).slice(-20);
+    if (inst.length) {
+      cjs.push(new Chart(document.getElementById("c-inst"), {
+        type: "bar",
+        data: { labels: inst.map((r) => md(r.date)), datasets: [
+          { label: "外資", data: inst.map((r) => +(r.foreign / 1e8).toFixed(1)), backgroundColor: v("--series-1") },
+          { label: "投信", data: inst.map((r) => +(r.trust / 1e8).toFixed(1)), backgroundColor: v("--series-2") },
+          { label: "自營商", data: inst.map((r) => +(r.dealer / 1e8).toFixed(1)), backgroundColor: v("--series-3") },
+        ] },
+        options: base,
+      }));
+    }
+    const fo = (m.fut_oi || []).slice(-60);
+    if (fo.length) {
+      cjs.push(new Chart(document.getElementById("c-fut"), {
+        data: { labels: fo.map((r) => md(r.date)), datasets: [
+          { type: "bar", label: "外資", data: fo.map((r) => r.foreign), backgroundColor: fo.map((r) => (r.foreign >= 0 ? v("--up") : v("--down"))), order: 3 },
+          { type: "line", label: "投信", data: fo.map((r) => r.trust), borderColor: v("--series-2"), backgroundColor: v("--series-2"), pointRadius: 0, borderWidth: 2, order: 1 },
+          { type: "line", label: "自營商", data: fo.map((r) => r.dealer), borderColor: v("--series-3"), backgroundColor: v("--series-3"), pointRadius: 0, borderWidth: 2, order: 2 },
+        ] },
+        options: base,
+      }));
+    }
+    const mg = (m.margin || []).slice(-120);
+    if (mg.length) {
+      cjs.push(new Chart(document.getElementById("c-margin"), {
+        data: { labels: mg.map((r) => md(r.date)), datasets: [
+          { type: "line", label: "融資餘額（億）", data: mg.map((r) => +(r.margin / 1e8).toFixed(1)), borderColor: v("--series-1"), backgroundColor: v("--series-1"), pointRadius: 0, borderWidth: 2, yAxisID: "y" },
+          { type: "line", label: "融券餘額（張）", data: mg.map((r) => r.short), borderColor: v("--series-2"), backgroundColor: v("--series-2"), pointRadius: 0, borderWidth: 2, yAxisID: "y1" },
+        ] },
+        options: Object.assign({}, base, { scales: { y: { position: "left" }, y1: { position: "right", grid: { drawOnChartArea: false } } } }),
+      }));
+    }
+  }
+
+  // ---------- 熱力圖 ----------
+  const heat = {
+    tw: { n: "300", mk: "all", range: 5, rows: null, file: "data/all/stocks.json", sizes: [["100", "前 100 大"], ["300", "前 300 大"], ["all", "全部"]] },
+    us: { n: "300", range: 3, rows: null, file: "data/all/us_stocks.json", sizes: [["100", "前 100 大"], ["300", "前 300 大"], ["500", "前 500 大"]] },
+  };
+  try { const s = JSON.parse(localStorage.getItem("market-heat") || "{}"); ["tw", "us"].forEach((k) => Object.assign(heat[k], s[k] || {})); } catch (e) {}
+  const saveHeat = () => { try { localStorage.setItem("market-heat", JSON.stringify({ tw: { n: heat.tw.n, mk: heat.tw.mk }, us: { n: heat.us.n } })); } catch (e) {} };
+
+  async function drawHeat(mk) {
+    const h = heat[mk], host = document.getElementById(mk + "-heat");
+    document.getElementById(mk + "-heat-n").innerHTML = h.sizes.map(([k, t]) => '<button type="button" data-n="' + k + '" aria-pressed="' + (h.n === k) + '">' + t + "</button>").join("");
+    if (mk === "tw") {
+      document.getElementById("tw-heat-mk").innerHTML = [["all", "上市＋上櫃"], ["TWSE", "上市"], ["TPEX", "上櫃"]]
+        .map(([k, t]) => '<button type="button" data-mk="' + k + '" aria-pressed="' + (h.mk === k) + '">' + t + "</button>").join("");
+    }
+    document.getElementById(mk + "-heat-legend").innerHTML = Heatmap.legend(h.range);
+    if (!h.rows) {
+      host.innerHTML = '<p class="note" style="color:#ccc">讀取中…</p>';
+      try {
+        const d = await App.loadJSON(h.file);
+        h.rows = d.rows.map((r) => Object.fromEntries(d.fields.map((f, i) => [f, r[i]])));
+        if (mk === "us") document.getElementById("us-heat-note").textContent = "資料：Nasdaq 選股器（收盤後更新，" + d.updated + "）。共 " + d.rows.length + " 檔，依市值取前幾大。";
+      } catch (e) { host.innerHTML = '<p class="note" style="color:#ccc">讀不到 ' + h.file + "（排程執行後才會產生）。</p>"; return; }
+    }
+    let rows = h.rows.filter((s) => App.isNum(s.mktcap) && s.mktcap > 0 && (mk === "us" || h.mk === "all" || s.market === h.mk));
+    rows.sort((a, b) => b.mktcap - a.mktcap);
+    if (h.n !== "all") rows = rows.slice(0, +h.n);
+    const groups = {};
+    rows.forEach((s) => {
+      const g = mk === "tw" ? s.industry : s.sector || "其他";
+      const pct = s.change_pct;
+      (groups[g] = groups[g] || []).push({
+        label: mk === "tw" ? s.name : s.code, value: s.mktcap, pct,
+        href: "stock.html?symbol=" + encodeURIComponent(s.code) + "&m=" + mk,
+        title: (mk === "tw" ? s.code + " " + s.name : s.code + " " + s.name) + "\n" + g + (mk === "us" && s.industry ? "／" + s.industry : "") +
+          "\n漲跌 " + App.fmtPct(pct, true) + "　市值 " + (mk === "tw" ? App.fmtNum(s.mktcap / 1e8, 0) + " 億" : "$" + App.fmtNum(s.mktcap / 1e9, 1) + "B"),
+      });
+    });
+    Heatmap.render(host, Object.entries(groups).map(([name, items]) => ({ name, items })), { range: h.range });
+  }
+  ["tw", "us"].forEach((mk) => {
+    document.getElementById(mk + "-heat-n").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { heat[mk].n = b.dataset.n; saveHeat(); drawHeat(mk); } });
+  });
+  document.getElementById("tw-heat-mk").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { heat.tw.mk = b.dataset.mk; saveHeat(); drawHeat("tw"); } });
+  // 視窗大小改變時重新排版
+  let rz;
+  new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { if (current && heat[current].rows) drawHeat(current); }, 200); }).observe(document.querySelector("main"));
+
+  // ---------- 分頁 ----------
+  const tabBtns = document.querySelectorAll(".mk-tabs button");
+  let current = null;
+  function showTab(mk) {
+    current = mk;
+    tabBtns.forEach((b) => { const on = b.dataset.mk === mk; b.setAttribute("aria-pressed", String(on)); b.setAttribute("aria-selected", String(on)); });
+    document.getElementById("pane-tw").hidden = mk !== "tw";
+    document.getElementById("pane-us").hidden = mk !== "us";
+    document.querySelectorAll(".sidebar a.sub").forEach((a) => {
+      const h = a.getAttribute("href");
+      if (/#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + mk));
+    });
+    document.getElementById("asof").textContent = mk === "tw" ? "台股資料 " + ((m.taiex && m.taiex.dates.slice(-1)[0]) || "—") + "（每個交易日收盤後更新）" : "Yahoo Finance 延遲報價";
+    try { localStorage.setItem("market-tab", mk); } catch (e) {}
+    drawHeat(mk);
+    drawK(mk);
+    if (mk === "us" && !document.getElementById("us-tiles").dataset.done) { document.getElementById("us-tiles").dataset.done = "1"; renderUsTiles(); }
+  }
+  tabBtns.forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.mk); showTab(b.dataset.mk); }));
+  window.addEventListener("hashchange", () => { if (/^#(tw|us)$/.test(location.hash)) showTab(location.hash.slice(1)); });
+  App.onThemeChange(() => { drawTwCharts(); drawK(current); });
+
+  if (!m.taiex) document.getElementById("tw-tiles").innerHTML = '<p class="note">讀不到 data/market.json（排程執行後才會產生）。</p>';
+  else { renderTwTiles(); drawTwCharts(); }
+  let first = /^#(tw|us)$/.test(location.hash) ? location.hash.slice(1) : null;
+  if (!first) { try { first = localStorage.getItem("market-tab"); } catch (e) {} }
+  showTab(first === "us" ? "us" : "tw");
+})();
+</script>
+</body>
+</html>
