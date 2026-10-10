@@ -319,6 +319,19 @@ tr.busy { opacity: .4; pointer-events: none; }
 .panel.kfs.fs-fallback > .note, .panel.kfs.fs-fallback > .table-wrap { display: none; }
 body.fs-lock { overflow: hidden; }
 
+/* K 線下方的摺疊區塊（扣抵表、說明）：和圖分開的框，可收合 */
+.k-box { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.k-box > summary { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 14px; font-weight: 600; list-style: none; user-select: none; }
+.k-box > summary::-webkit-details-marker { display: none; }
+.k-box > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.k-box[open] > summary::before { transform: rotate(45deg); }
+.k-box > summary::after { content: "展開"; margin-left: auto; padding: 2px 10px; border: 1px solid var(--border); border-radius: 12px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.k-box[open] > summary::after { content: "收合"; }
+.k-box > summary:hover::after, .k-box > summary:focus-visible::after { color: var(--accent); border-color: var(--accent); }
+.k-box[open] > summary { border-bottom: 1px solid var(--border); }
+.k-box > .table-wrap { margin: 0; border: 0; border-radius: 0 0 8px 8px; }
+.k-box > .note { margin: 0; padding: 10px 12px; }
+
 /* 副圖一、副圖二選單 */
 .sub-sel { display: inline-flex; gap: 10px; flex-wrap: wrap; }
 .sub-sel label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); white-space: nowrap; }

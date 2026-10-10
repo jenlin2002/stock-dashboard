@@ -355,6 +355,16 @@
     sync();
   }
 
+  // ---------- K 線下方的摺疊區塊（<details>）：記住展開／收合 ----------
+  function rememberBoxes(ids) {
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      try { const v = localStorage.getItem("kbox-" + id); if (v != null) el.open = v === "1"; } catch (e) {}
+      el.addEventListener("toggle", () => { try { localStorage.setItem("kbox-" + id, el.open ? "1" : "0"); } catch (e) {} });
+    });
+  }
+
   // ---------- 價／量／副圖三格的高度：格與格之間的拖拉條，高度記在瀏覽器 ----------
   // panes：[{ el, key, def, min }]，每格下方加一條拖拉條，往下拉變高、往上拉變矮
   // 全螢幕時 K 線那格自動填滿（CSS flex），拖它下面那條就改成調整下一格（往下拉＝下一格變矮）
@@ -554,5 +564,5 @@
 
   window.Charts = {
     aggregate, timeLabel, destroyKlines, kline, revenue, quarterly, eps, destroyAll, quarterLabel,
-    maSettings, saveMaSettings, DEFAULT_MA, initPanes, fullscreenButton, SUB_COLORS, DMI_N, SUB_TYPES, subsOf, subSelectsHtml };
+    maSettings, saveMaSettings, DEFAULT_MA, initPanes, fullscreenButton, rememberBoxes, SUB_COLORS, DMI_N, SUB_TYPES, subsOf, subSelectsHtml };
 })();

@@ -54,8 +54,11 @@
     <div class="body sub-body" id="w-sub1"></div>
     <div class="body sub-body" id="w-sub2"></div>
     <div class="body sub-body" id="w-sub3"></div>
-    <div class="table-wrap" id="t-deduct"></div>
-    <p class="note" id="kline-note" hidden>
+    <details class="k-box" id="box-deduct" open hidden><summary>扣抵表</summary>
+      <div class="table-wrap" id="t-deduct"></div>
+    </details>
+    <details class="k-box" id="box-note" hidden><summary>說明</summary>
+    <p class="note" id="kline-note">
       日線：每日收盤資料（台股 FinMind、美股 Yahoo Finance）；週線、月線由日線合併；分鐘線：Yahoo Finance 延遲報價（1 分鐘最近 5 天、5～30 分鐘最近 60 天、60 分鐘最近 1 年）。紅漲綠跌，可拖曳、滾輪縮放。<br>
       均線、扣抵、DMI 等指標都以「根」計算：在 5 分線上 MA8 就是 8 根 5 分 K 的平均。<br>
       <b>台股盤中即時</b>（富果行情，免費方案）：開盤時間每 5 秒更新股價、今天的日 K 和分鐘 K（之前幾天的分鐘線仍是 Yahoo），均線、指標、扣抵跟著變；收盤後停止。股價旁的標籤顯示「即時／已收盤／未接即時」。<br>
@@ -65,6 +68,7 @@
       「接下來 5 根」：扣抵值多數低於現值為<b>扣低</b>（容易續揚），多數高於現值為<b>扣高</b>（容易轉弱）。
       DMI：紅線 +DI、綠線 −DI、藍線 ADX（點線為 25，高於 25 表示趨勢明確）。
     </p>
+    </details>
   </section>
 
   <section class="panel" id="p-revenue" hidden>
@@ -182,7 +186,8 @@
   }
   document.getElementById("p-revenue").hidden = !(d.monthly_revenue && d.monthly_revenue.length);
   document.getElementById("p-quarterly").hidden = !(d.quarterly && d.quarterly.length);
-  document.getElementById("kline-note").hidden = false;
+  document.getElementById("box-note").hidden = false;
+  Charts.rememberBoxes(["box-deduct", "box-note"]);  // 扣抵表、說明的展開／收合記在瀏覽器
 
   // ---------- K 線設定（記在瀏覽器，讀不到就用預設） ----------
   // 均線（天數、顏色、粗細、開關）在「⚙ 均線設定」改，存在 Charts.maSettings()
@@ -332,7 +337,8 @@
   let deductShown = -1, kMa = [], kVolMa = [];
   function renderDeductTable(t, volArr) {
     const el = document.getElementById("t-deduct");
-    if (!opts.deduct) { el.innerHTML = ""; deductShown = -1; return; }
+    const box = document.getElementById("box-deduct");
+    if (!opts.deduct) { el.innerHTML = ""; box.hidden = true; deductShown = -1; return; }
     if (t === deductShown) return;
     deductShown = t;
     const close = kp.close, last = close[t], lastVol = volArr[t];
@@ -353,7 +359,8 @@
       '<td class="' + App.upDown(r.dir) + '">' + (r.dir > 0 ? "均量增 ↗" : r.dir < 0 ? "均量減 ↘" : "持平") + "</td>" +
       "<td>量" + (r.dir >= 0 ? "低於 " : "高於 ") + vf(r.value) + "</td>" +
       trendCell(r, vf) + "</tr>");
-    if (!priceRows.length && !volRows.length) { el.innerHTML = ""; return; }
+    box.hidden = !priceRows.length && !volRows.length;
+    if (box.hidden) { el.innerHTML = ""; return; }
     el.innerHTML = '<table><thead><tr><th>以 ' + Charts.timeLabel(kp.dates[t]) + ' 為基準（' + tfName(opts.tf) + '線）</th><th>目前值</th><th>下一根扣抵值</th><th>下一根方向（收盤／量不變）</th><th>轉向門檻</th><th>接下來 5 根扣抵</th></tr></thead><tbody>' +
       priceRows.join("") + volRows.join("") + "</tbody></table>";
   }
