@@ -219,6 +219,8 @@ body.lp > footer { max-width: 1680px; margin: 16px auto 0; padding: 16px 20px; }
 .sf-row span { color: var(--muted); }
 .sf-row b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .sf-note { padding: 6px 14px; margin: 0; }
+.sf-score { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; padding: 8px 14px 4px; font-size: 13px; color: var(--muted); }
+.sf-score b { color: var(--text); font-size: 16px; }
 @media (max-width: 1100px) { .sf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .sf-grid { grid-template-columns: minmax(0, 1fr); } }
 .w-sform { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; padding: 0 14px 14px; }

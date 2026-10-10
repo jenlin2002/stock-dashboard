@@ -30,11 +30,11 @@
         '<div><b class="sf-px ' + App.upDown(ch) + '">' + (m === "us" ? "$" : "") + App.fmtPrice(c) + '</b> <span class="' + App.upDown(ch) + '">' + App.fmtPct(ch, true) + '</span> <span class="updated">' + p.dates[n - 1] + "</span></div></div>" +
         spark(p.close.slice(-120)) + '<p class="updated dr-cap">近 120 個交易日</p>' +
         '<div class="dr-rings">' + Scoring.LABELS.map(([k, t]) => Scoring.ring({ fund: "基本面", value: "評價", tech: "技術面", chip: "籌碼面" }[k], f ? f[k] : null)).join("") + "</div>" +
-        '<p class="updated dr-cap">四面評分 0–100（全市場百分位）；技術面、籌碼面待補。</p>' +
+        '<p class="updated dr-cap">四面評分 0–100（全市場百分位，公式見頁尾）' + (m === "us" ? "；美股評分待補" : "") + "</p>" +
         '<div class="dr-act"><button type="button" class="btn primary" data-act="fav">★ 加入自選</button> <a class="btn" href="stock.html?symbol=' + encodeURIComponent(code) + "&m=" + m + '">完整個股頁 →</a></div>' +
         '<h4 class="dr-h">本益成長比評分卡</h4><div data-c="peg"></div>' +
         '<h4 class="dr-h">技術重點</h4><div class="sf-card">' + tech + "</div>" +
-        '<h4 class="dr-h">籌碼重點</h4><p class="note">— 個股法人、融資、大戶持股資料待補（第 7 步）。</p>';
+        '<h4 class="dr-h">籌碼重點</h4>' + (m === "tw" ? '<div class="sf-card">' + StockFaces.chips(s) + "</div>" : '<p class="note">— 美股沒有法人、融資資料</p>');
       Widgets.render(el.querySelector('[data-c="peg"]'), "pegCard", { market: m, symbol: code, help: false });
       el.querySelector('[data-act="fav"]').addEventListener("click", (e) => AddFav.open(e.target, { m, code, name, market: item.market, exchange: item.exchange }));
     }

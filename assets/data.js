@@ -16,7 +16,21 @@
       const rows = toObjects(d);
       return { updated: d.updated, rows, by: new Map(rows.map((r) => [String(r.code).toUpperCase(), r])) };
     }),
-    twAll: () => Data.table("data/all/stocks.json"),
+    // 全台股總表＋選股器資料（data/screener-tw.json：均線、5／20 日漲跌、法人、融資、單季 EPS；第 7 步）合併成同一列
+    twAll: () => once("twAll", async () => {
+      const t = await Data.table("data/all/stocks.json");
+      try {
+        const sc = await App.loadJSON("data/screener-tw.json");
+        const idx = new Map(sc.fields.map((f, i) => [f, i]));
+        const by = new Map(sc.rows.map((r) => [r[0], r]));
+        t.rows.forEach((s) => {
+          const r = by.get(s.code);
+          if (r) for (const [f, i] of idx) if (f !== "code") s[f] = r[i];
+        });
+        t.screener = { updated: sc.updated, price_date: sc.price_date, inst_date: sc.inst_date, margin_date: sc.margin_date, eps_quarter: sc.eps_quarter };
+      } catch (e) { t.screener = null; }  // 還沒有選股器資料：相關條件顯示待補
+      return t;
+    }),
     usAll: () => Data.table("data/all/us_stocks.json"),
     market: () => Data.json("data/market.json"),
     watchlist: () => once("watchlist", () => App.loadWatchlist()),

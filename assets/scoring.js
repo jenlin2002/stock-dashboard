@@ -1,8 +1,10 @@
 // 四面評分（0–100，越高越好）。公式（頁面說明也照這裡寫）：
 //   基本面＝全市場百分位的平均：ROE、EPS 成長率（近四季對前四季）、月營收年增率
 //   評價  ＝全市場百分位的平均（越便宜分數越高）：本益比（只算正的）、PEG（沒有用推估 PEG，只算正的）、殖利率
-//   技術面、籌碼面：需要每檔的歷史股價、法人與融資資料，第 7 步補資料後加入；現在是 null（顯示「—」）
-// 百分位：在有資料的股票中排第幾（0＝最差、100＝最好）；沒有資料的那一項不算進平均，三項都沒有就是 null。
+//   技術面＝平均：20 日漲跌的百分位、收盤距季線（MA60）的百分位、均線狀態（多頭排列 100、只站上季線 50、跌破季線 0）
+//   籌碼面＝全市場百分位的平均：外資＋投信近 5 日買賣超佔市值比例、外資連買天數、融資 5 日增減（減少越多分數越高）
+//   （技術面、籌碼面用 data/screener-tw.json；沒有那份檔案時是 null，顯示「—」）
+// 百分位：在有資料的股票中排第幾（0＝最差、100＝最好）；沒有資料的那一項不算進平均，全部都沒有就是 null。
 (function () {
   const isNum = (x) => App.isNum(x);
   const pegOf = (s) => (isNum(s.peg) ? s.peg : s.peg_est);
@@ -21,11 +23,16 @@
     const r = {
       roe: rank(rows, (s) => s.roe, true), eg: rank(rows, (s) => s.eps_growth, true), rv: rank(rows, (s) => s.rev_yoy, true),
       pe: rank(rows, (s) => (s.pe > 0 ? s.pe : null), false), peg: rank(rows, (s) => (pegOf(s) > 0 ? pegOf(s) : null), false), yd: rank(rows, (s) => s.yield, true),
+      c20: rank(rows, (s) => s.chg20, true), d60: rank(rows, (s) => (s.ma60 > 0 && s.close ? s.close / s.ma60 - 1 : null), true),
+      inst: rank(rows, (s) => (isNum(s.fi_5) && isNum(s.it_5) && s.mktcap > 0 && s.close ? (s.fi_5 + s.it_5) * 1000 * s.close / s.mktcap : null), true),
+      fd: rank(rows, (s) => s.fi_days, true), mg: rank(rows, (s) => s.mg_chg5, false),
     };
+    const maState = (s) => (s.bull === 1 && s.above60 === 1 ? 100 : s.above60 === 1 ? 50 : s.above60 === 0 ? 0 : null);
     const out = new Map(rows.map((s) => [s.code, {
       fund: avg([r.roe.get(s.code), r.eg.get(s.code), r.rv.get(s.code)]),
       value: avg([r.pe.get(s.code), r.peg.get(s.code), r.yd.get(s.code)]),
-      tech: null, chip: null,
+      tech: avg([r.c20.get(s.code), r.d60.get(s.code), maState(s)]),
+      chip: avg([r.inst.get(s.code), r.fd.get(s.code), r.mg.get(s.code)]),
     }]));
     memo.set(rows, out);
     return out;

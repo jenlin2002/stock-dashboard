@@ -27,7 +27,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       TZ: Asia/Taipei   # 讓 JSON 裡的 updated 日期用台灣時間
     steps:
@@ -97,6 +97,29 @@ jobs:
         if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
         run: python scripts/build_all.py
+
+      # 選股器資料（均線、5／20 日漲跌、個股法人、融資、單季 EPS）：證交所、櫃買中心、公開資訊觀測站，一次拿全部股票
+      # 原始歷史（近 70 個交易日價量、近 10 日法人與融資）放在 .cache/，用 actions/cache 保留；遺失時腳本會自動往回補（約 10 分鐘）
+      - name: 還原選股器快取
+        if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch'
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: screener-${{ github.run_id }}
+          restore-keys: screener-
+
+      - name: 更新選股器 screener-tw.json
+        if: github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        timeout-minutes: 20
+        run: python scripts/build_screener.py
+
+      - name: 保存選股器快取
+        if: always() && hashFiles('.cache/*.json') != '' && (github.event.schedule == '0 8 * * 1-5' || github.event_name == 'workflow_dispatch')
+        uses: actions/cache/save@v4
+        with:
+          path: .cache
+          key: screener-${{ github.run_id }}
 
       - name: 有變更才 commit 並 push
         run: |

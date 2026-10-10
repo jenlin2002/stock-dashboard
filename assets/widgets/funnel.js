@@ -1,7 +1,7 @@
 // 區塊：選股漏斗（C 版中欄）：策略卡 → 篩選漏斗（每一層剩幾檔）→ 結果列（名稱、產業、股價、四面評分圓點、PEG、☆ 自選）。
 // 結果可以「全部加入自選」「匯出 CSV」。點一列發出 "sd:pick"（C 版打開右邊的個股抽屜）。
 // 也可以改成顯示某個自選清單：widget.showList(名稱, ["tw:2330", …])，「回到策略」回來。
-// 資料：全台股總表；月營收創高用 data/all/revenue_hist.json（近 13 個月）。需要新資料的策略先灰掉（第 7 步）。
+// 資料：全台股總表；月營收創高用 data/all/revenue_hist.json（近 13 個月）；籌碼集中、技術突破用 data/screener-tw.json（沒有時灰掉）。
 (function () {
   const isNum = (x) => App.isNum(x);
   const pegOf = (s) => (isNum(s.peg) ? s.peg : s.peg_est);
@@ -9,8 +9,8 @@
     tw: [
       { k: "garp", t: "成長 GARP", d: "EPS 成長、PEG 便宜、ROE 好", steps: [["EPS 成長 ≥ 15%", (s) => s.eps_growth >= 15], ["PEG ≤ 1", (s) => pegOf(s) > 0 && pegOf(s) <= 1], ["ROE ≥ 10%", (s) => s.roe >= 10]] },
       { k: "div", t: "穩定存股", d: "高殖利率、有賺錢、不貴", steps: [["近四季 EPS > 0", (s) => s.eps_ttm > 0], ["殖利率 ≥ 4%", (s) => s.yield >= 4], ["ROE ≥ 10%", (s) => s.roe >= 10], ["本益比 ≤ 20", (s) => s.pe > 0 && s.pe <= 20]] },
-      { k: "chip", t: "籌碼集中", d: "法人連買、大戶增加", need: "個股法人、集保大戶" },
-      { k: "break", t: "技術突破", d: "站上季線、多頭排列、帶量", need: "全市場均線" },
+      { k: "chip", t: "籌碼集中", d: "外資連買、投信買超、融資減少", data: true, steps: [["外資連買 ≥ 3 日", (s) => s.fi_days >= 3], ["投信 5 日買超", (s) => s.it_5 > 0], ["融資 5 日減少", (s) => s.mg_chg5 < 0]] },
+      { k: "break", t: "技術突破", d: "站上季線、多頭排列、60 日新高、帶量", data: true, steps: [["站上季線（MA60）", (s) => s.above60 === 1], ["多頭排列 MA5>MA20>MA60", (s) => s.bull === 1], ["創 60 日新高", (s) => s.high60 === 1], ["量比 ≥ 1.5（今日量 ÷ 20 日均量）", (s) => s.vol_ratio >= 1.5]] },
       { k: "revhigh", t: "月營收創高", d: "最新月營收創近 13 個月新高", rev: true, steps: [["月營收創近 13 個月新高", (s, x) => x.revHigh.has(s.code)], ["月營收年增 ≥ 20%", (s) => s.rev_yoy >= 20], ["近四季 EPS > 0", (s) => s.eps_ttm > 0]] },
     ],
     us: [
@@ -56,7 +56,10 @@
       }
       const strats = STRATS[st.mk];
       if (!strats.some((s) => s.k === st.strat)) st.strat = strats[0].k;
-      q("strats").innerHTML = strats.map((s) => '<button type="button" class="fn-card" data-s="' + s.k + '" aria-pressed="' + (st.strat === s.k) + '"' + (s.need ? ' disabled title="需要「' + s.need + '」資料，待補（第 7 步）"' : "") + "><b>" + s.t + "</b><span>" + s.d + "</span>" + (s.need ? "<em>待補</em>" : "") + "</button>").join("");
+      const off = (s) => s.need || (s.data && !tw.screener);
+      if (off(strats.find((s) => s.k === st.strat) || {})) st.strat = (strats.find((s) => !off(s)) || strats[0]).k;
+      q("strats").innerHTML = strats.map((s) => '<button type="button" class="fn-card" data-s="' + s.k + '" aria-pressed="' + (st.strat === s.k) + '"' +
+        (off(s) ? ' disabled title="需要「' + (s.need || "選股器資料 data/screener-tw.json") + '」，待補"' : "") + "><b>" + s.t + "</b><span>" + s.d + "</span>" + (off(s) ? "<em>待補</em>" : "") + "</button>").join("");
       const S = strats.find((s) => s.k === st.strat);
       if (S.need) { q("funnel").innerHTML = '<p class="note">— 這個策略需要「' + S.need + "」資料，第 7 步補上。</p>"; q("rows").innerHTML = ""; result = []; return; }
       if (S.rev && !extra.revHigh.size) {
@@ -67,7 +70,7 @@
       for (const [label, f] of S.steps) { list = list.filter((s) => f(s, extra)); layers.push([label, list.length]); }
       const max = layers[0][1] || 1;
       q("funnel").innerHTML = layers.map(([label, n], i) => '<div class="fn-layer" style="--w:' + Math.max(18, n / max * 100).toFixed(1) + '%"><span>' + (i ? "＋ " : "") + label + "</span><b>" + n.toLocaleString() + " 檔</b></div>").join("");
-      q("asof").textContent = "資料 " + tw.updated + (S.rev && extra.revMonth ? "・營收 " + extra.revMonth : "");
+      q("asof").textContent = "資料 " + tw.updated + (S.rev && extra.revMonth ? "・營收 " + extra.revMonth : "") + (S.data && tw.screener ? "・價量 " + tw.screener.price_date + "・法人 " + tw.screener.inst_date : "");
       result = list.sort((a, b) => (b.mktcap || 0) - (a.mktcap || 0)).map((s) => Object.assign({ _m: "tw" }, s));
       rows(tw);
     }

@@ -5,3 +5,4 @@ data/**/*.tmp
 .wrangler/
 node_modules/
 dev-*.html
+.cache/

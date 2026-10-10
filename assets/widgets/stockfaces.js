@@ -1,6 +1,6 @@
 // 區塊：個股四面分析（基本面、評價、技術面、籌碼面）＋加入自選。
 // 基本面、評價：全台股總表（和 PEG 評分卡同一份）；技術面：個股日線算均線排列、季線、RSI14、ADX、扣抵門檻；
-// 籌碼面：個股法人、融資資料待補（LAYOUT-SPEC 第 7 步）。0–100 的四面評分在第 7 步（js/scoring.js）。
+// 籌碼面：外資連買、法人 5 日、融資增減（data/screener-tw.json）。0–100 四面評分：assets/scoring.js。
 // 參數：market、symbol；回傳 update({market, symbol})
 (function () {
   const isNum = (x) => App.isNum(x);
@@ -32,7 +32,16 @@
       (d ? row("MA" + ok[0].n + " 扣抵門檻", App.fmtPrice(d.value) + "（" + App.fmtPct(d.gapPct, true) + "）") : "");
   }
 
-  window.StockFaces = { technical };  // C 版個股抽屜也用
+  // 籌碼面（data/screener-tw.json 合併進全台股總表的欄位）；沒有資料就說明待補
+  const lots = (x) => (isNum(x) ? (x > 0 ? "+" : x < 0 ? "−" : "") + App.fmtNum(Math.abs(x), 0) + " 張" : "—");
+  function chips(s) {
+    if (!s || !isNum(s.fi_5)) return '<p class="note">— 個股法人、融資資料還沒有（data/screener-tw.json，排程每天收盤後產生）。</p>';
+    return row("外資連" + (s.fi_days >= 0 ? "買" : "賣"), isNum(s.fi_days) ? Math.abs(s.fi_days) + " 日" : "—", App.upDown(s.fi_days)) +
+      row("外資 5 日", lots(s.fi_5), App.upDown(s.fi_5)) + row("投信 5 日", lots(s.it_5), App.upDown(s.it_5)) + row("自營商 5 日", lots(s.dl_5), App.upDown(s.dl_5)) +
+      row("融資 1 日增減", lots(s.mg_chg)) + row("融資 5 日增減", lots(s.mg_chg5)) +
+      (isNum(s.eps_up_q) ? row("單季 EPS 年增", s.eps_up_q + " 季連續" + (isNum(s.eps_q_yoy) ? "（最新 " + App.fmtPct(s.eps_q_yoy, true) + "）" : ""), s.eps_up_q >= 3 ? "up" : "") : "");
+  }
+  window.StockFaces = { technical, chips };  // C 版個股抽屜也用
 
   Widgets.register("stockFaces", (el, o) => {
     el.classList.add("w-faces");
@@ -44,7 +53,8 @@
       let item, d, s = null;
       try { item = await Data.item(cur.market, cur.symbol); d = await Data.stock(item); } catch (e) { if (my === seq) el.innerHTML = '<p class="note">— 讀不到 ' + App.esc(cur.symbol) + "（" + App.esc(e.message) + "）</p>"; return; }
       const m = App.marketOf(item), code = App.symbolOf(item).toUpperCase();
-      try { s = (await (m === "tw" ? Data.twAll() : Data.usAll())).by.get(code) || null; } catch (e) {}
+      let twRows = null;
+      try { const t = await (m === "tw" ? Data.twAll() : Data.usAll()); s = t.by.get(code) || null; if (m === "tw") twRows = t.rows; } catch (e) {}
       if (my !== seq) return;
       const p = d.price, n = p.close.length, c = p.close[n - 1], ch = n > 1 ? (c / p.close[n - 2] - 1) * 100 : null;
       const name = (s && s.name) || d.name || item.name;
@@ -68,8 +78,13 @@
           '<section class="sf-card"><h4>基本面</h4>' + fund + "</section>" +
           '<section class="sf-card"><h4>評價</h4>' + val + "</section>" +
           '<section class="sf-card"><h4>技術面</h4>' + tech + "</section>" +
-          '<section class="sf-card"><h4>籌碼面</h4><p class="note">— 個股外資／投信 5 日、融資增減、大戶持股、借券資料待補（FinMind，LAYOUT-SPEC 第 7 步）。大盤法人在「籌碼面」分頁。</p></section>' +
-        "</div><p class=\"updated sf-note\">四面 0–100 評分在第 7 步加入（公式會寫在頁面說明）。</p>";
+          '<section class="sf-card"><h4>籌碼面</h4>' + (m === "tw" ? chips(s) : '<p class="note">— 美股沒有法人、融資資料</p>') + "</section>" +
+        "</div>" + (m === "tw" ? (() => {
+          let f = null;
+          try { f = Scoring.faces(twRows).get(code); } catch (e) {}
+          return f ? '<div class="sf-score">' + [["fund", "基本面"], ["value", "評價"], ["tech", "技術面"], ["chip", "籌碼面"]].map(([k, t]) => '<span>' + t + " <b>" + (isNum(f[k]) ? f[k] : "—") + "</b></span>").join("") +
+            '<span class="updated">四面評分 0–100（全市場百分位，公式見頁尾）</span></div>' : "";
+        })() : "");
       el.querySelector('[data-act="fav"]').addEventListener("click", (e) => AddFav.open(e.target, { m, code, name, market: item.market, exchange: item.exchange }));
     }
     draw();
