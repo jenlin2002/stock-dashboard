@@ -4,3 +4,4 @@ data/**/*.tmp
 .dev.vars
 .wrangler/
 node_modules/
+dev-*.html
