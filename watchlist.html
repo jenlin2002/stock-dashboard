@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>台美股看盤</title>
+<title>我的追蹤｜台美股看盤</title>
 <script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 <header class="topbar">
-  <h1><a href="index.html">台美股看盤</a></h1>
-  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
+  <h1><a href="index.html?home=1">台美股看盤</a></h1>
+  <nav><a href="watchlist.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 <div class="tape" id="tape"></div>
 
@@ -284,7 +284,7 @@
     // 左側選單：台股／美股（庫存股、自選股分頁時都不標）
     document.querySelectorAll(".sidebar a.sub").forEach((a) => {
       const h = a.getAttribute("href") || "";
-      if (/^(index\.html)?#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + view));
+      if (/^(watchlist\.html|index\.html)?#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + view));
     });
     renderTabs();
     renderCards();

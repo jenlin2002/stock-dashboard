@@ -10,8 +10,8 @@
 </head>
 <body>
 <header class="topbar">
-  <h1><a href="index.html">台美股看盤</a></h1>
-  <nav><a href="index.html">追蹤清單</a><a href="compare.html">比較</a></nav>
+  <h1><a href="index.html?home=1">台美股看盤</a></h1>
+  <nav><a href="watchlist.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 
 <main id="main">
@@ -144,7 +144,7 @@
       : { ticker: symbol.toUpperCase(), name: symbol.toUpperCase(), exchange: "NASDAQ" };
   }
   if (!item) {
-    main.innerHTML = '<p class="msg">沒有指定股票代號。請用上方搜尋框查詢，或從<a href="index.html">追蹤清單</a>進入。</p>';
+    main.innerHTML = '<p class="msg">沒有指定股票代號。請用上方搜尋框查詢，或從<a href="watchlist.html">追蹤清單</a>進入。</p>';
     return;
   }
 
