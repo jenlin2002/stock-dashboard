@@ -1,9 +1,27 @@
 {
   "tw": [
+    { "code": "1307", "name": "三芳", "market": "TWSE" },
+    { "code": "1477", "name": "聚陽", "market": "TWSE" },
+    { "code": "1558", "name": "伸興", "market": "TWSE" },
+    { "code": "1580", "name": "新麥", "market": "TPEX" },
+    { "code": "1717", "name": "長興", "market": "TWSE" },
+    { "code": "2002", "name": "中鋼", "market": "TWSE" },
     { "code": "2330", "name": "台積電", "market": "TWSE" },
+    { "code": "2412", "name": "中華電", "market": "TWSE" },
+    { "code": "2454", "name": "聯發科", "market": "TWSE" },
+    { "code": "2605", "name": "新興", "market": "TWSE" },
+    { "code": "2884", "name": "玉山金", "market": "TWSE" },
+    { "code": "2886", "name": "兆豐金", "market": "TWSE" },
+    { "code": "2891", "name": "中信金", "market": "TWSE" },
+    { "code": "2892", "name": "第一金", "market": "TWSE" },
+    { "code": "3008", "name": "大立光", "market": "TWSE" },
     { "code": "3017", "name": "奇鋐", "market": "TWSE" },
+    { "code": "3481", "name": "群創", "market": "TWSE" },
+    { "code": "5871", "name": "中租-KY", "market": "TWSE" },
     { "code": "6488", "name": "環球晶", "market": "TPEX" },
-    { "code": "6805", "name": "富世達", "market": "TWSE" }
+    { "code": "6805", "name": "富世達", "market": "TWSE" },
+    { "code": "9910", "name": "豐泰", "market": "TWSE" },
+    { "code": "9938", "name": "百和", "market": "TWSE" }
   ],
   "us": [
     { "ticker": "AAPL", "name": "Apple", "exchange": "NASDAQ" },
