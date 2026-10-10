@@ -80,7 +80,9 @@ a { color: var(--accent); }
 .layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: calc(100vh - 53px); }
 .content { min-width: 0; }
 .panel, .two-col { scroll-margin-top: 64px; }  /* 點選單細項跳到錨點時，不被固定的頁首蓋住 */
-.content > main { max-width: 1240px; }
+/* 右側內容靠左（緊貼選單），不置中；寬螢幕一排可以放更多卡片 */
+.content > main { max-width: 1600px; margin: 0; padding: 16px 24px; }
+.content > footer { max-width: 1600px; margin: 24px 0 0; padding: 16px 24px; }
 .sidebar { border-right: 1px solid var(--border); background: var(--card); }
 .sidebar nav { position: sticky; top: 53px; max-height: calc(100vh - 53px); overflow-y: auto; padding: 10px 8px 24px; }
 .grp { margin-bottom: 6px; }
