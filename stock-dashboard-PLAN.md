@@ -2,7 +2,7 @@
 
 ## 主頁＋A／B／C 三種版面（2026-10-11，依 LAYOUT-SPEC.md 第 9 節）
 
-**進度**：第 1～6 步完成（commit「版面切換第 N 步」）；**第 7 步（補新資料）還沒做**。
+**進度**：第 1～7 步全部完成（commit「版面切換第 N 步」「第 7 步之 N」，2026-10-11）。
 1. 頁首版面切換 `assets/layout-switch.js`：所有頁面右上「主頁｜A 指揮中心｜B 工作台｜C 選股」（手機縮成 ⌂ A B C）。
    - 切換時用網址參數帶著 market、symbol。
    - localStorage：`sd.layout`、`sd.rememberLayout`；另外 A 版有 `sd.market`。

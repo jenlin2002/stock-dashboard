@@ -45,6 +45,23 @@
   }
   window.StockFaces = { technical, chips };  // C 版個股抽屜也用
 
+  // 區塊：個股籌碼卡（B 版「籌碼面」分頁）：參數 market、symbol
+  Widgets.register("chipCard", (el, o) => {
+    el.classList.add("w-chipcard");
+    let cur = null, seq = 0;
+    async function draw(market, symbol) {
+      const my = ++seq;
+      cur = { market, symbol };
+      if (!symbol || market === "us" || !/^\d/.test(symbol)) { el.innerHTML = '<div class="w-head"><h3>個股籌碼</h3></div><p class="note" style="padding:0 14px 12px">— 只有台股有法人、融資、大戶、借券資料</p>'; return; }
+      let s = null, t = null;
+      try { t = await Data.twAll(); s = t.by.get(String(symbol).toUpperCase()) || null; } catch (e) {}
+      if (my !== seq) return;
+      el.innerHTML = '<div class="w-head"><h3>個股籌碼：' + App.esc((s && s.name) || symbol) + " " + App.esc(symbol) + '</h3><span class="updated">' + (t && t.screener ? "法人、融資 " + t.screener.inst_date : "") + '</span></div><div class="sf-card" style="margin:0 14px 14px">' + chips(s) + "</div>";
+    }
+    draw(o.market, o.symbol);
+    return { update(n) { if (n.symbol && (!cur || n.symbol !== cur.symbol)) draw(n.market, n.symbol); } };
+  });
+
   Widgets.register("stockFaces", (el, o) => {
     el.classList.add("w-faces");
     let cur = { market: o.market === "us" ? "us" : "tw", symbol: String(o.symbol || "").toUpperCase() }, seq = 0;
