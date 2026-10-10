@@ -280,10 +280,10 @@
     try { localStorage.setItem("watch-view-key", isGroup() ? "g" + view : view); } catch (e) {}
     const hash = "#" + (isGroup() ? "g" + (view + 1) : view);
     if (location.hash !== hash) history.replaceState(null, "", hash);
-    // 左側選單：台股／美股／自選股
+    // 左側選單：台股／美股（庫存股、自選股分頁時都不標）
     document.querySelectorAll(".sidebar a.sub").forEach((a) => {
       const h = a.getAttribute("href") || "";
-      if (/^(index\.html)?#(tw|us|hold)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + (view === "tw" || view === "us" ? view : "hold")));
+      if (/^(index\.html)?#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + view));
     });
     renderTabs();
     renderCards();
