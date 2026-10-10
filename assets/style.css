@@ -297,9 +297,11 @@ tr.busy { opacity: .4; pointer-events: none; }
 /* 價／量／副圖三格與拖拉條 */
 .kpane { position: relative; }
 .chart-body.kpane, .sub-body.kpane { height: auto; }
-.pane-resizer { height: 8px; cursor: row-resize; background: transparent; border-top: 1px solid var(--border); position: relative; touch-action: none; }
-.pane-resizer::after { content: ""; position: absolute; left: 50%; top: 2px; width: 36px; height: 3px; margin-left: -18px; border-radius: 2px; background: var(--border); }
-.pane-resizer:hover::after, .pane-resizer.dragging::after, .pane-resizer:focus-visible::after { background: var(--accent); }
+.pane-resizer { height: 12px; cursor: row-resize; background: transparent; border-top: 1px solid var(--border); position: relative; touch-action: none; }
+.pane-resizer::after { content: ""; position: absolute; left: 50%; top: 3px; width: 56px; height: 5px; margin-left: -28px; border-radius: 3px; background: var(--muted); opacity: .55; }
+.pane-resizer:hover, .pane-resizer.dragging { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.pane-resizer:hover::after, .pane-resizer.dragging::after, .pane-resizer:focus-visible::after { background: var(--accent); opacity: 1; }
+@media (pointer: coarse) { .pane-resizer { height: 20px; } .pane-resizer::after { top: 7px; } }  /* 手機手指好按 */
 .kpane[hidden] + .pane-resizer { display: none; }
 
 /* K 線全螢幕 */

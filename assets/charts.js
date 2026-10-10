@@ -357,10 +357,17 @@
 
   // ---------- 價／量／副圖三格的高度：格與格之間的拖拉條，高度記在瀏覽器 ----------
   // panes：[{ el, key, def, min }]，每格下方加一條拖拉條，往下拉變高、往上拉變矮
+  // 全螢幕時 K 線那格自動填滿（CSS flex），拖它下面那條就改成調整下一格（往下拉＝下一格變矮）
   function initPanes(storeKey, panes) {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(storeKey) || "{}"); } catch (e) {}
-    panes.forEach((pn) => {
+    const set = (pn, h) => {
+      h = Math.max(pn.min || 60, Math.min(1200, Math.round(h)));
+      pn.el.style.height = h + "px";
+      saved[pn.key] = h;
+      try { localStorage.setItem(storeKey, JSON.stringify(saved)); } catch (e) {}
+    };
+    panes.forEach((pn, idx) => {
       pn.el.classList.add("kpane");
       pn.el.style.height = (saved[pn.key] || pn.def) + "px";
       if (pn.el.nextElementSibling && pn.el.nextElementSibling.classList.contains("pane-resizer")) return;
@@ -372,26 +379,34 @@
       bar.tabIndex = 0;
       bar.title = "上下拖拉調整高度（也可用方向鍵）";
       pn.el.after(bar);
-      const set = (h) => {
-        h = Math.max(pn.min || 60, Math.min(1200, Math.round(h)));
-        pn.el.style.height = h + "px";
-        saved[pn.key] = h;
-        try { localStorage.setItem(storeKey, JSON.stringify(saved)); } catch (e) {}
+      const target = () => {
+        if (getComputedStyle(pn.el).flexGrow !== "0") {
+          const next = panes.slice(idx + 1).find((x) => !x.el.hidden);
+          if (next) return { p: next, sign: -1 };
+        }
+        return { p: pn, sign: 1 };
       };
       bar.addEventListener("pointerdown", (e) => {
         e.preventDefault();
-        const y0 = e.clientY, h0 = pn.el.getBoundingClientRect().height;
+        const t = target(), y0 = e.clientY, h0 = t.p.el.getBoundingClientRect().height;
         bar.setPointerCapture(e.pointerId);
         bar.classList.add("dragging");
-        const move = (ev) => set(h0 + ev.clientY - y0);
-        const upFn = () => { bar.classList.remove("dragging"); bar.removeEventListener("pointermove", move); bar.removeEventListener("pointerup", upFn); };
+        const move = (ev) => set(t.p, h0 + t.sign * (ev.clientY - y0));
+        const upFn = () => {
+          bar.classList.remove("dragging");
+          bar.removeEventListener("pointermove", move);
+          bar.removeEventListener("pointerup", upFn);
+          bar.removeEventListener("pointercancel", upFn);
+        };
         bar.addEventListener("pointermove", move);
         bar.addEventListener("pointerup", upFn);
+        bar.addEventListener("pointercancel", upFn);
       });
       bar.addEventListener("keydown", (e) => {
         if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
-          set(pn.el.getBoundingClientRect().height + (e.key === "ArrowDown" ? 20 : -20));
+          const t = target();
+          set(t.p, t.p.el.getBoundingClientRect().height + t.sign * (e.key === "ArrowDown" ? 20 : -20));
         }
       });
     });
