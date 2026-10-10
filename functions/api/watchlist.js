@@ -9,11 +9,15 @@ const PATH = "config/watchlist.json";
 const US_EXCHANGES = ["NASDAQ", "NYSE", "CBOE", "AMEX"];
 
 export async function onRequestPost(ctx) {
-  const { request, env } = ctx;
+  const { request } = ctx;
+  let { env } = ctx;
   const url = new URL(request.url);
   const origin = request.headers.get("Origin");
   if (origin && origin !== url.origin) return json({ error: "不允許的來源" }, 403);
-  if (!env.GITHUB_TOKEN) return json({ error: "尚未設定 GITHUB_TOKEN（Cloudflare → stock-dashboard → Settings → Variables and Secrets）" }, 501);
+  // 貼上權杖時常多帶空白、換行或引號，先清掉
+  const token = String(env.GITHUB_TOKEN || "").trim().replace(/^["']|["']$/g, "");
+  if (!token) return json({ error: "尚未設定 GITHUB_TOKEN（Cloudflare → stock-dashboard → Settings → Variables and Secrets）" }, 501);
+  env = Object.assign({}, env, { GITHUB_TOKEN: token });
 
   let body;
   try { body = await request.json(); } catch (e) { return json({ error: "格式錯誤" }, 400); }
@@ -28,6 +32,8 @@ export async function onRequestPost(ctx) {
   // 兩人（或兩個分頁）同時改會撞到 sha，重試一次
   for (let attempt = 0; attempt < 2; attempt++) {
     const file = await gh(env, "GET", "/repos/" + repo + "/contents/" + PATH + "?ref=main");
+    if (file.status === 401) return json({ error: "GitHub 權杖無效（401）：請重新產生權杖，用複製鈕整串複製，貼到 Cloudflare 的 GITHUB_TOKEN，再重新部署" }, 502);
+    if (file.status === 404) return json({ error: "GitHub 找不到 repo（404）：權杖沒有授權 stock-dashboard，或 Contents 權限沒設成 Read and write" }, 502);
     if (!file.ok) return json({ error: "讀取 GitHub 失敗：" + file.error }, 502);
     let w;
     try { w = JSON.parse(b64decode(file.data.content)); } catch (e) { return json({ error: "watchlist.json 格式壞了，請到 GitHub 修正" }, 500); }

@@ -9,7 +9,7 @@
     { icon: "📋", label: "全台股總表", href: "all.html", ready: true, subs: [["依股號", "all.html"], ["依產業", "all.html?view=industry"]] },
     { icon: "🔍", label: "個股分析", href: "stock.html?symbol=" + encodeURIComponent(lastSymbol), page: "stock", ready: true,
       subs: [["PEG 評分卡", "#p-refs"], ["K 線・指標", "#p-kline"], ["月營收", "#p-revenue"], ["季度財報", "#p-quarterly"], ["股利", "#p-div"]] },
-    { icon: "⭐", label: "我的追蹤", href: "index.html", ready: true, subs: [["追蹤清單", "index.html"], ["比較表", "compare.html"]] },
+    { icon: "⭐", label: "我的追蹤", href: "index.html", ready: true, subs: [["台股", "index.html#tw"], ["美股", "index.html#us"], ["比較表", "compare.html"]] },
   ];
 
   // 目前在哪一頁（Cloudflare 會把 /stock.html 變成 /stock，"/" 是首頁）
@@ -29,7 +29,9 @@
     }
     const subs = (g.subs || []).map(([t, h]) => {
       // 「#」開頭的細項是本頁錨點，只有在該頁時才連到錨點，否則先進該頁
-      const href = h.startsWith("#") ? (active ? h : g.href + h) : h;
+      // 「頁面#分頁」的細項：已經在該頁時只換分頁（不重新載入）
+      const href = h.startsWith("#") ? (active ? h : g.href + h)
+        : h.includes("#") && pageOf(h) === page ? h.slice(h.indexOf("#")) : h;
       const cur = !h.startsWith("#") && keyOf(h) === curKey;
       return '<a class="sub' + (cur ? " cur" : "") + '" href="' + href + '">' + t + "</a>";
     }).join("");

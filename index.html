@@ -16,10 +16,14 @@
 <div class="tape" id="tape"></div>
 
 <main>
-  <h2>台股</h2>
-  <div class="grid" id="tw"></div>
-  <h2>美股</h2>
-  <div class="grid" id="us"></div>
+  <div class="toolbar">
+    <div class="seg mk-tabs" role="tablist" aria-label="市場">
+      <button type="button" role="tab" data-mk="tw">台股</button>
+      <button type="button" role="tab" data-mk="us">美股</button>
+    </div>
+  </div>
+  <div class="grid" id="tw" role="tabpanel"></div>
+  <div class="grid" id="us" role="tabpanel" hidden></div>
 </main>
 
 <dialog id="add-dlg" aria-labelledby="add-title">
@@ -174,6 +178,30 @@
 
   addCards(w.tw, document.getElementById("tw"), "tw");
   addCards(w.us, document.getElementById("us"), "us");
+
+  // 台股／美股分頁：網址 #tw、#us 可直接指定（左側選單用），否則用上次看的分頁
+  const tabBtns = document.querySelectorAll(".mk-tabs button");
+  tabBtns.forEach((b) => { b.textContent += "（" + w[b.dataset.mk].length + "）"; });
+  function showTab(mk) {
+    tabBtns.forEach((b) => {
+      const on = b.dataset.mk === mk;
+      b.setAttribute("aria-pressed", String(on));
+      b.setAttribute("aria-selected", String(on));
+    });
+    document.getElementById("tw").hidden = mk !== "tw";
+    document.getElementById("us").hidden = mk !== "us";
+    // 左側選單「我的追蹤 → 台股／美股」跟著標示目前分頁
+    document.querySelectorAll(".sidebar a.sub").forEach((a) => {
+      const h = a.getAttribute("href");
+      if (/#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + mk));
+    });
+    try { localStorage.setItem("watch-tab", mk); } catch (e) {}
+  }
+  tabBtns.forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.mk); showTab(b.dataset.mk); }));
+  window.addEventListener("hashchange", () => { if (/^#(tw|us)$/.test(location.hash)) showTab(location.hash.slice(1)); });
+  let first = /^#(tw|us)$/.test(location.hash) ? location.hash.slice(1) : null;
+  if (!first) { try { first = localStorage.getItem("watch-tab"); } catch (e) {} }
+  showTab(first === "us" ? "us" : "tw");
 })();
 </script>
 </body>

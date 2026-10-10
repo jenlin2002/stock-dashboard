@@ -52,6 +52,7 @@
 .down { color: var(--down); }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* hidden 屬性一律隱藏（不被 .grid 等 display 規則蓋掉） */
 body {
   margin: 0;
   background: var(--bg);

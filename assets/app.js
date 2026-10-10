@@ -50,7 +50,13 @@
   async function loadLiveData(item) {
     const q = new URLSearchParams({ market: marketOf(item), symbol: symbolOf(item), name: item.name || "" });
     if (item.code) q.set("exchange", item.market || "TWSE");
-    else { q.set("exchange", item.exchange || "NASDAQ"); if (item.cik) q.set("cik", item.cik); }
+    else {
+      // 追蹤清單裡的美股沒有 CIK（SEC 公司編號），從股票清單補上，財報才抓得到
+      let cik = item.cik;
+      if (!cik) { const hit = await lookupStock(item.ticker, "us"); cik = hit && hit.cik; }
+      q.set("exchange", item.exchange || "NASDAQ");
+      if (cik) q.set("cik", cik);
+    }
     const res = await fetch("api/stock?" + q);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "即時查詢失敗（" + res.status + "）");
