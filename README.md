@@ -40,6 +40,18 @@ Cloudflare → Workers & Pages → `stock-dashboard` → Settings → **Variable
 
 > 網站改清單也是一個 commit，所以在 GitHub Desktop 推送前一樣要先 **Fetch → Pull**。
 
+## 台股盤中即時（富果行情 API）
+
+個股頁、大盤頁、我的追蹤的台股，在開盤時間（週一到週五 08:30～13:40）會自動更新，資料來自 `functions/api/rt.js`。
+
+設定方法：
+1. 到 [developer.fugle.tw](https://developer.fugle.tw) 用富果會員登入，申請**行情 API 金鑰**。免費的基本用戶方案就夠用。
+2. 到 Cloudflare → `stock-dashboard` → Settings → Variables and Secrets，在 Production 加入 `FUGLE_API_KEY`，類型選 Secret。
+3. 回到 Deployments，在最新一次部署按 **Retry deployment**。
+
+還沒設定時，網站會顯示「未接即時」，其他功能照常。
+本機測試時，可以把 `FUGLE_API_KEY=金鑰` 寫進專案根目錄的 `.dev.vars`。這個檔案已列在 .gitignore，不會上傳。
+
 也可以手動改 **`config/watchlist.json`**：
 
 ```json

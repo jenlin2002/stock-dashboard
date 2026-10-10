@@ -34,11 +34,12 @@
     </section>
     <section class="panel" id="p-k">
       <h3 id="tw-title">K 線</h3>
-      <div class="tf-tabs"><span class="seg" id="tw-src"></span> <span class="seg" id="tw-tf"></span> <span class="seg" id="tw-sub-btns"></span> <span id="tw-track"></span></div>
+      <div class="tf-tabs"><span class="seg" id="tw-src"></span> <span class="seg" id="tw-tf"></span> <span id="tw-track"></span> <span id="tw-live"></span></div>
       <div class="klegend" id="tw-legend"></div>
       <div class="body chart-body" id="tw-chart"></div>
-      <div class="body vol-body" id="tw-vol"></div>
-      <div class="body sub-body" id="tw-sub"></div>
+      <div class="body sub-body" id="tw-sub1"></div>
+      <div class="body sub-body" id="tw-sub2"></div>
+      <div class="body sub-body" id="tw-sub3"></div>
       <p class="note" id="tw-note"></p>
     </section>
     <div class="two-col charts-2">
@@ -70,11 +71,12 @@
     </section>
     <section class="panel">
       <h3 id="us-title">K 線</h3>
-      <div class="tf-tabs"><span class="seg" id="us-src"></span> <span class="seg" id="us-tf"></span> <span class="seg" id="us-sub-btns"></span> <span id="us-track"></span></div>
+      <div class="tf-tabs"><span class="seg" id="us-src"></span> <span class="seg" id="us-tf"></span> <span id="us-track"></span></div>
       <div class="klegend" id="us-legend"></div>
       <div class="body chart-body" id="us-chart"></div>
-      <div class="body vol-body" id="us-vol"></div>
-      <div class="body sub-body" id="us-sub"></div>
+      <div class="body sub-body" id="us-sub1"></div>
+      <div class="body sub-body" id="us-sub2"></div>
+      <div class="body sub-body" id="us-sub3"></div>
       <p class="note">Yahoo Finance 延遲報價；成交量為股數（費城半導體指數沒有成交量）。日線 5 年，週、月線由日線合併。</p>
     </section>
   </section>
@@ -92,6 +94,7 @@
 <script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/maconfig.js"></script>
+<script src="assets/live.js"></script>
 <script src="assets/heatmap.js"></script>
 <script>
 (async function () {
@@ -99,15 +102,21 @@
   const fmt = (x, d) => App.fmtNum(x, d == null ? 2 : d);
   const signed = (x, d) => (isNum(x) ? (x > 0 ? "+" : "") + App.fmtNum(x, d == null ? 2 : d) : "—");
 
-  // K 線指標設定沿用個股頁（MA、扣抵、副圖）
-  // 均線（天數、顏色、粗細）和個股頁共用「⚙ 均線設定」
-  let kopts = { deduct: true, sub: "dmi" };
+  // K 線設定和個股頁共用：「⚙ 設定」裡改副圖一、副圖二的指標與均線（天數、顏色、粗細）
+  let kopts = { deduct: true };
   try { kopts = Object.assign(kopts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
   delete kopts.ma;
-  ["tw", "us"].forEach((mk) => Charts.initPanes("pane-h-market-" + mk, [
+  kopts.subs = Charts.subsOf(kopts);  // ["vol", 副圖一, 副圖二]
+  delete kopts.sub;
+  const subHosts = (mk) => [1, 2, 3].map((i) => document.getElementById(mk + "-sub" + i));
+  // 台股盤中即時（富果）：加權 IX0001、櫃買 IX0043
+  const FUGLE = { TWII: "IX0001", OTC: "IX0043" }, DAY = { TWII: "taiex", OTC: "otc" };
+  const liveDaily = {}, liveQ = {}, liveMin = {};  // liveDaily.taiex：日線（元）加上今天；liveMin["TWII:5"]：今天的分鐘 K
+  ["tw", "us"].forEach((mk) => Charts.initPanes("pane-h-market3-" + mk, [
     { el: document.getElementById(mk + "-chart"), key: "price", def: 380, min: 150 },
-    { el: document.getElementById(mk + "-vol"), key: "vol", def: 110, min: 50 },
-    { el: document.getElementById(mk + "-sub"), key: "sub", def: 140, min: 60 },
+    { el: subHosts(mk)[0], key: "sub1", def: 110, min: 50 },
+    { el: subHosts(mk)[1], key: "sub2", def: 110, min: 50 },
+    { el: subHosts(mk)[2], key: "sub3", def: 110, min: 50 },
   ]));
 
   let m = {};
@@ -128,9 +137,10 @@
     return tile(name, fmt(x.c), '<span class="' + App.upDown(chg) + '">' + signed(chg) + "（" + App.fmtPct(pct, true) + "）</span>" + (volLabel ? "<br>" + volLabel(x) : ""), App.upDown(chg));
   }
 
-  async function renderTwTiles() {
+  // 前四格（加權、櫃買、台指期、成交金額）：盤中即時更新時只重畫這四格
+  function coreTiles() {
     const h = [];
-    const t = m.taiex, o = m.otc, tx = m.tx;
+    const t = liveDaily.taiex || m.taiex, o = liveDaily.otc || m.otc, tx = m.tx;
     h.push(chgTile("加權指數", t, (x) => "成交 " + fmt(yi(x.v), 0) + " 億"));
     h.push(chgTile("櫃買指數", o, (x) => "成交 " + fmt(yi(x.v), 0) + " 億"));
     // 台指期：基差＝期貨 − 現貨（同一天）
@@ -146,6 +156,18 @@
       avg /= 5;
       h.push(tile("上市＋上櫃成交金額", fmt(yi(tot), 0) + " 億", "5 日均 " + fmt(yi(avg), 0) + " 億（" + App.fmtPct((tot / avg - 1) * 100, true) + "）"));
     }
+    return h;
+  }
+  function updateCoreTiles() {
+    const host = document.getElementById("tw-tiles"), h = coreTiles();
+    if (host.children.length < h.length || h.length !== coreCount) return;  // 方塊還沒畫好
+    h.forEach((html, i) => { host.children[i].outerHTML = html; });
+  }
+
+  let coreCount = 0;
+  async function renderTwTiles() {
+    const h = coreTiles();
+    coreCount = h.length;
     // 漲跌家數：全台股總表
     try {
       const a = await App.loadJSON("data/all/stocks.json");
@@ -227,6 +249,30 @@
     return (st.cache[key] = p);
   }
 
+  // 加上富果即時：日線多今天一根；分鐘線的今天部分換成富果（櫃買指數沒有 Yahoo 歷史，只有今天）
+  async function liveSeriesOf(mk, src, tf) {
+    if (mk !== "tw" || !FUGLE[src.key] || !liveQ[src.key]) return seriesOf(mk, src, tf);
+    if ("DWM".includes(tf)) {
+      const day = liveDaily[DAY[src.key]] ? toYi(liveDaily[DAY[src.key]]) : await seriesOf(mk, src, "D");
+      return tf === "D" ? day : Charts.aggregate(day, tf);
+    }
+    const hist = src.key === "TWII" ? await seriesOf(mk, src, tf).catch(() => null) : null;
+    const today = liveMin[src.key + ":" + tf];
+    if (!today) { if (hist) return hist; throw new Error("讀取今天的分鐘線…"); }
+    const yi = { price: Object.assign({}, today.price, { volume: today.price.volume.map((x) => Math.round(x / 1e8)) }) };  // 成交金額 元 → 億
+    return Live.mergeMinute(hist, yi);
+  }
+  async function refreshK(mk) {
+    const st = state[mk];
+    if (!st.k) return;
+    const seq = st.seq, k = st.k, src = SOURCES[mk].find((s) => s.key === st.src);
+    if (!FUGLE[src.key]) return;
+    const p = await liveSeriesOf(mk, src, st.tf).catch(() => null);
+    if (!p || seq !== st.seq || k !== st.k) return;
+    st.p = p;
+    k.update(p);
+  }
+
   function renderControls(mk) {
     const st = state[mk], src = SOURCES[mk].find((s) => s.key === st.src);
     if (!src.minute && !"DWM".includes(st.tf)) st.tf = "D";
@@ -235,11 +281,9 @@
       const off = !src.minute && !"DWM".includes(k);
       return '<button type="button" data-tf="' + k + '" aria-pressed="' + (k === st.tf) + '"' + (off ? ' disabled title="' + src.name + '沒有免費的盤中資料"' : "") + ">" + t + "</button>";
     }).join("");
-    document.getElementById(mk + "-sub-btns").innerHTML = [["dmi", "DMI"], ["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["none", "不顯示"]]
-      .map(([k, t]) => '<button type="button" data-sub="' + k + '" aria-pressed="' + (kopts.sub === k) + '">' + t + "</button>").join("");
-    document.getElementById(mk + "-track").innerHTML = '<label class="track" title="打勾：游標移到哪根 K 棒，上方數值、扣抵就換成那一根；不打勾：游標只顯示十字線">' +
-      '<input type="checkbox"' + (kopts.track !== false ? " checked" : "") + ">查價</label>" +
-      ' <button type="button" class="btn ma-btn" data-ma-cfg title="均線、均量線的天數、顏色、粗細">⚙ 均線設定</button>';
+    document.getElementById(mk + "-track").innerHTML = '<button type="button" class="btn ma-btn" data-ma-cfg title="副圖一、副圖二的技術指標，均線、均量線的天數、顏色、粗細">⚙ 設定</button> ' +
+      '<label class="track" title="打勾：游標移到哪根 K 棒，上方數值、扣抵就換成那一根；不打勾：游標只顯示十字線">' +
+      '<input type="checkbox"' + (kopts.track !== false ? " checked" : "") + ">查價</label>";
   }
 
   async function drawK(mk) {
@@ -250,17 +294,21 @@
     document.getElementById(mk + "-title").textContent = src.name + " K 線（" + tfName + "）";
     const lg = document.getElementById(mk + "-legend");
     lg.innerHTML = "<span>讀取中…</span>";
+    st.k = null;
     let p;
-    try { p = await seriesOf(mk, src, st.tf); } catch (e) {
+    try { p = await liveSeriesOf(mk, src, st.tf); } catch (e) {
       if (seq === st.seq) lg.innerHTML = '<span class="down">' + App.esc(e.message) + "</span>";
       return;
     }
     if (seq !== st.seq) return;
-    Charts.destroyKlines();
-    const k = Charts.kline({ price: document.getElementById(mk + "-chart"), vol: document.getElementById(mk + "-vol"), sub: document.getElementById(mk + "-sub") },
+    Charts.destroyKlines();  // 兩個市場的圖都會清掉
+    state.tw.k = state.us.k = null;
+    const k = Charts.kline({ price: document.getElementById(mk + "-chart"), subs: subHosts(mk) },
       { market: "IDX", price: p, volUnit: src.unit }, kopts);
+    st.k = k; st.p = p;
     const intraday = typeof p.dates[0] === "number";
     k.onCrosshair((i) => {
+      const p = st.p;  // 盤中即時更新後會換成新的資料
       const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
       let html = "<span>" + Charts.timeLabel(p.dates[i]) + "</span><span>開 " + fmt(p.open[i]) + " 高 " + fmt(p.high[i]) + " 低 " + fmt(p.low[i]) +
         ' 收 <b class="' + App.upDown(chg) + '">' + fmt(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
@@ -270,11 +318,14 @@
         html += k.volMa.map((x) => '<span style="color:' + x.color + '">均量' + x.n + " " + (isNum(k.values["VMA" + x.n][i]) ? App.fmtNum(k.values["VMA" + x.n][i], 0) : "—") + "</span>").join("");
       }
       if (src.key === "TX" && p.oi) html += "<span>未平倉 " + App.fmtNum(p.oi[i], 0) + " 口</span>";
+      html += k.indLegend(i);
       lg.innerHTML = html;
     });
     if (mk === "tw") {
       document.getElementById("tw-note").textContent = intraday
-        ? "加權指數分鐘線：Yahoo Finance 延遲報價，沒有盤中成交量。"
+        ? (liveQ[src.key] ? "分鐘線：今天的 K 棒來自富果即時行情（量為成交金額，億元）；之前幾天是 Yahoo Finance，沒有成交量。櫃買指數只有今天。"
+          : "加權指數分鐘線：Yahoo Finance 延遲報價，沒有盤中成交量。")
+        : liveQ[src.key] ? "日線資料：FinMind（證交所、櫃買中心）＋今天盤中即時（富果），量為成交金額（億元）；週、月線由日線合併。"
         : src.key === "TX" ? "台指期主力：每天取成交量最大的單一月份契約（一般交易時段，不含夜盤）；量為口數。櫃買指數、台指期沒有免費的分鐘資料。"
         : "日線資料：FinMind（證交所、櫃買中心），量為成交金額（億元）；週、月線由日線合併。";
     }
@@ -282,17 +333,20 @@
 
   ["tw", "us"].forEach((mk) => {
     const save = () => { try { localStorage.setItem("market-k-" + mk, JSON.stringify({ src: state[mk].src, tf: state[mk].tf })); } catch (e) {} };
-    document.getElementById(mk + "-src").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { state[mk].src = b.dataset.src; save(); drawK(mk); } });
-    document.getElementById(mk + "-tf").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.disabled) { state[mk].tf = b.dataset.tf; save(); drawK(mk); } });
-    document.getElementById(mk + "-sub-btns").addEventListener("click", (e) => {
+    document.getElementById(mk + "-src").addEventListener("click", (e) => {
       const b = e.target.closest("button");
       if (!b) return;
-      kopts.sub = b.dataset.sub;
-      try { localStorage.setItem("kline-opts-v2", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("kline-opts-v2") || "{}"), { sub: kopts.sub }))); } catch (err) {}
-      drawK(mk);
+      state[mk].src = b.dataset.src; save(); drawK(mk);
+      if (mk === "tw" && liveCtl && FUGLE[b.dataset.src] && !"DWM".includes(state.tw.tf)) liveCtl.now();
+    });
+    document.getElementById(mk + "-tf").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b || b.disabled) return;
+      state[mk].tf = b.dataset.tf; save(); drawK(mk);
+      if (mk === "tw" && liveCtl && !"DWM".includes(b.dataset.tf)) liveCtl.now();  // 換到分鐘線：馬上抓今天的 K 棒
     });
     document.getElementById(mk + "-track").addEventListener("click", (e) => {
-      if (e.target.closest("[data-ma-cfg]")) MaConfig.open(() => drawK(mk));
+      if (e.target.closest("[data-ma-cfg]")) MaConfig.open(kopts.subs, (subs) => { kopts.subs = subs; drawK(mk); });
     });
     document.getElementById(mk + "-track").addEventListener("change", (e) => {
       kopts.track = e.target.checked;
@@ -463,6 +517,29 @@
   tabBtns.forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.mk); showTab(b.dataset.mk); }));
   window.addEventListener("hashchange", () => { if (/^#(tw|us)$/.test(location.hash)) showTab(location.hash.slice(1)); });
   App.onThemeChange(() => { drawTwCharts(); drawK(current); });
+
+  // 台股盤中即時：每 10 秒抓加權、櫃買報價（＋目前看的分鐘線）。看美股分頁時不抓。
+  let liveCtl = null;
+  if (m.taiex) liveCtl = Live.start(async () => {
+    if (current === "us") return true;
+    const st = state.tw, src = SOURCES.tw.find((s) => s.key === st.src);
+    const minute = !!FUGLE[src.key] && !"DWM".includes(st.tf);
+    const r = await Live.fetchRt([FUGLE.TWII, FUGLE.OTC], minute ? FUGLE[src.key] : null, st.tf);
+    Object.keys(FUGLE).forEach((k) => {
+      const q = r.quotes[FUGLE[k]];
+      if (!q) return;
+      liveQ[k] = q;
+      if (m[DAY[k]]) liveDaily[DAY[k]] = Live.mergeDaily(m[DAY[k]], q, 1);
+    });
+    if (minute && r.candles) liveMin[src.key + ":" + st.tf] = r.candles;
+    if (!SOURCES.tw[1].minute) { SOURCES.tw[1].minute = true; if (current === "tw") renderControls("tw"); }  // 有富果才有櫃買分鐘線
+    updateCoreTiles();
+    if (st.k) await refreshK("tw"); else if (current === "tw") drawK("tw");  // 分鐘線第一次拿到今天的資料
+    return !!liveQ.TWII && liveQ.TWII.date === Live.twNow().date;
+  }, 10000, (s) => {
+    document.getElementById("tw-live").innerHTML = Live.badge(s);
+    if (current === "tw" && liveQ.TWII && !s.error) document.getElementById("asof").textContent = "台股即時（富果）" + liveQ.TWII.date;
+  });
 
   if (!m.taiex) document.getElementById("tw-tiles").innerHTML = '<p class="note">讀不到 data/market.json（排程執行後才會產生）。</p>';
   else { renderTwTiles(); drawTwCharts(); }

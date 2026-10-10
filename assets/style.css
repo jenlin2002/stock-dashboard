@@ -302,6 +302,20 @@ tr.busy { opacity: .4; pointer-events: none; }
 .pane-resizer:hover::after, .pane-resizer.dragging::after, .pane-resizer:focus-visible::after { background: var(--accent); }
 .kpane[hidden] + .pane-resizer { display: none; }
 
+/* 副圖一、副圖二選單 */
+.sub-sel { display: inline-flex; gap: 10px; flex-wrap: wrap; }
+.sub-sel label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.sub-sel select { padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+
+/* 盤中即時標籤 */
+.live-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.live-badge.on { color: var(--up); border-color: var(--up); }
+.live-badge.on i { width: 7px; height: 7px; border-radius: 50%; background: var(--up); animation: live-blink 1.2s infinite; }
+.live-badge.err { color: var(--muted); border-style: dashed; }
+.live-badge.off { opacity: .7; }
+@keyframes live-blink { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .live-badge.on i { animation: none; } }
+
 /* 均線設定對話框 */
 .ma-dlg { width: min(560px, calc(100vw - 32px)); }
 .ma-dlg h4 { margin: 14px 0 6px; font-size: 14px; }

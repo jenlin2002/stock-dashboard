@@ -21,6 +21,7 @@
       <button type="button" role="tab" data-mk="tw">台股</button>
       <button type="button" role="tab" data-mk="us">美股</button>
     </div>
+    <span id="tw-live"></span>
     <div class="view-wrap">
     <span class="view-label" id="view-label">畫面顯示：</span>
     <div class="seg view-btns" role="group" aria-labelledby="view-label">
@@ -67,6 +68,7 @@
 <script src="assets/widgets.js"></script>
 <script src="assets/refs.js"></script>
 <script src="assets/stockcols.js"></script>
+<script src="assets/live.js"></script>
 <script>
 (async function () {
   let w;
@@ -77,6 +79,8 @@
     return;
   }
   ownTape(document.getElementById("tape"));
+  const twCards = new Map();  // 台股代號 → 卡片的走勢區（盤中即時更新用）
+  const lastQ = {};           // 台股代號 → 最新的富果即時報價
 
   function addCards(list, el, m) {
     for (const item of list) {
@@ -91,6 +95,7 @@
       a.querySelector(".rm").setAttribute("aria-label", "從追蹤清單移除 " + item.name);
       a.querySelector(".rm").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); removeStock(m, item, a); });
       el.appendChild(a);
+      if (m === "tw") twCards.set(sym, a.querySelector(".mini"));
       ownMini(a.querySelector(".mini"), item);
     }
     // 最後一格是「＋」：加入新的追蹤股票
@@ -202,7 +207,7 @@
       '<div class="own-mini">' +
         '<div><span class="px ' + App.upDown(diff) + '">' + (d.market === "US" ? "$" : "") + App.fmtPrice(c[n - 1]) + '</span>' +
         '<span class="chg ' + App.upDown(diff) + '">' + App.fmtPct(pct, true) + '</span></div>' +
-        '<div class="sub">收盤 ' + App.esc(dates[n - 1]) + "・近一年 " + App.fmtPct((c[n - 1] / c[0] - 1) * 100, true) + "</div>" +
+        '<div class="sub">' + (d._live ? (d._live.closed ? "收盤 " : "盤中 ") + App.esc(d._live.date) : "收盤 " + App.esc(dates[n - 1])) + "・近一年 " + App.fmtPct((c[n - 1] / c[0] - 1) * 100, true) + "</div>" +
         '<svg viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
           '<polyline points="' + pts + '" fill="none" stroke="var(--' + (yearCls || "muted") + ')" stroke-width="1.6" vector-effect="non-scaling-stroke"/>' +
         "</svg>" +
@@ -259,6 +264,7 @@
         const s = Object.assign({ code: it.code, name: it.name, market: it.market }, all && all.byCode[it.code]);
         s.peg_any = App.isNum(s.peg) ? s.peg : s.peg_est;
         s._item = it;
+        applyQuote(s, lastQ[it.code]);
         return s;
       });
     } else {
@@ -279,6 +285,7 @@
     const at = base.findIndex((c) => c.k === "change_pct") + 1;
     const cols = base.slice(0, at).concat([{ k: "_spark", t: "近一年走勢", nosort: true, f: (s) => '<span class="sp" data-sym="' + App.esc(s.code) + '"></span>' }], base.slice(at));
     const st = listState[m];
+    const oldWrap = host.querySelector(".table-wrap"), scrollX = oldWrap ? oldWrap.scrollLeft : 0;  // 即時更新重畫時保留左右捲動位置
     let list = rows.slice();
     if (st.key) {
       list.sort((a, b) => {
@@ -299,6 +306,7 @@
           '<td><button type="button" class="rm-row" title="從追蹤清單移除" aria-label="從追蹤清單移除 ' + App.esc(s.name) + '">×</button></td></tr>').join("") +
       "</tbody></table></div>" +
       '<button type="button" class="list-add">＋ 加入' + (m === "tw" ? "台股" : "美股") + "</button>";
+    if (scrollX) host.querySelector(".table-wrap").scrollLeft = scrollX;
 
     // 走勢圖：資料到了就畫上去
     list.forEach((s) => {
@@ -334,6 +342,37 @@
   let first = /^#(tw|us)$/.test(location.hash) ? location.hash.slice(1) : null;
   if (!first) { try { first = localStorage.getItem("watch-tab"); } catch (e) {} }
   showTab(first === "us" ? "us" : "tw");
+
+  // ---------- 台股盤中即時（富果）：卡片、清單的股價、漲跌、成交量 ----------
+  // 富果免費方案每分鐘 60 次、每檔算一次：間隔隨檔數拉長（約每分鐘用 30 次，留額度給個股頁）
+  function applyQuote(s, q) {
+    if (!s || !q || q.price == null) return;
+    s.close = q.price; s.change_pct = q.pct; s.volume = q.vol;
+  }
+  if (w.tw.length) {
+    const codes = w.tw.map((x) => x.code);
+    Live.start(async () => {
+      for (let i = 0; i < codes.length; i += 20) {
+        const r = await Live.fetchRt(codes.slice(i, i + 20));
+        Object.assign(lastQ, r.quotes);
+      }
+      for (const it of w.tw) {
+        const q = lastQ[it.code];
+        if (!q) continue;
+        const key = "tw:" + it.code;
+        const d = dataCache[key] && await dataCache[key].catch(() => null);
+        if (d) {
+          d._base = d._base || d.price;
+          d.price = Live.mergeDaily(d._base, q, 1000);  // 富果的量是張，日線是股
+          d._live = q;
+          if (twCards.has(it.code)) ownMini(twCards.get(it.code), it);
+        }
+        applyQuote(listState.tw.rows && listState.tw.rows.find((s) => s.code === it.code), q);
+      }
+      if (listState.tw.rows && document.querySelector("main").classList.contains("mode-list")) renderList("tw");
+      return Object.values(lastQ).some((q) => q.date === Live.twNow().date);
+    }, Math.max(10000, codes.length * 2000), (s) => { document.getElementById("tw-live").innerHTML = Live.badge(s); });
+  }
 })();
 </script>
 </body>

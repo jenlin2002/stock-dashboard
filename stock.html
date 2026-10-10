@@ -51,13 +51,15 @@
     <div class="kctl" id="kctl" hidden></div>
     <div class="klegend" id="klegend"></div>
     <div class="body chart-body" id="w-chart"></div>
-    <div class="body vol-body" id="w-vol" hidden></div>
-    <div class="body sub-body" id="w-sub" hidden></div>
+    <div class="body sub-body" id="w-sub1"></div>
+    <div class="body sub-body" id="w-sub2"></div>
+    <div class="body sub-body" id="w-sub3"></div>
     <div class="table-wrap" id="t-deduct"></div>
     <p class="note" id="kline-note" hidden>
       日線：每日收盤資料（台股 FinMind、美股 Yahoo Finance）；週線、月線由日線合併；分鐘線：Yahoo Finance 延遲報價（1 分鐘最近 5 天、5～30 分鐘最近 60 天、60 分鐘最近 1 年）。紅漲綠跌，可拖曳、滾輪縮放。<br>
       均線、扣抵、DMI 等指標都以「根」計算：在 5 分線上 MA8 就是 8 根 5 分 K 的平均。<br>
-      價、量、副圖各自一格，拖拉格子下方的橫條可以調整高度（會記住）。「⚙ 均線設定」可以改均線、均量線的天數、顏色、粗細，也可以新增或刪除；大盤頁共用同一組設定。<br>
+      <b>台股盤中即時</b>（富果行情，免費方案）：開盤時間每 5 秒更新股價、今天的日 K 和分鐘 K（之前幾天的分鐘線仍是 Yahoo），均線、指標、扣抵跟著變；收盤後停止。股價旁的標籤顯示「即時／已收盤／未接即時」。<br>
+      價、量、副圖各自一格，拖拉格子下方的橫條可以調整高度（會記住）。「⚙ 設定」可以選副圖一、副圖二要看的技術指標（DMI、KD、RSI、MACD 或不顯示），改均線、均量線的天數、顏色、粗細，也可以新增或刪除；大盤頁共用同一組設定。<br>
       <b>扣抵（動態）</b>：游標指到哪一天，就以那天為基準標出扣抵 K 棒（箭頭）與扣抵價（虛線），下表也跟著換；沒有指著時以最新一天為準。
       N 根均線下一根會扣掉 N 根前那根 K 棒的收盤價（扣抵值）：下一根收盤高於扣抵值，均線上揚；低於則下彎。均量同理（看成交量）。
       「接下來 5 根」：扣抵值多數低於現值為<b>扣低</b>（容易續揚），多數高於現值為<b>扣高</b>（容易轉弱）。
@@ -113,6 +115,7 @@
 <script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
 <script src="assets/maconfig.js"></script>
+<script src="assets/live.js"></script>
 <script src="assets/refs.js"></script>
 <script>
 (async function () {
@@ -183,17 +186,19 @@
 
   // ---------- K 線設定（記在瀏覽器，讀不到就用預設） ----------
   // 均線（天數、顏色、粗細、開關）在「⚙ 均線設定」改，存在 Charts.maSettings()
-  const SUBS = ["dmi", "kd", "rsi", "macd", "none"];
-  let opts = { deduct: true, sub: "dmi" };
+  // 副圖一～三（opts.subs）：每格可選成交量、DMI、KD、RSI、MACD 或不顯示
+  let opts = { deduct: true };
   try { opts = Object.assign(opts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
   delete opts.ma;
-  if (!SUBS.includes(opts.sub)) opts.sub = "dmi";
-  const wChart = document.getElementById("w-chart"), wVol = document.getElementById("w-vol"), wSub = document.getElementById("w-sub");
-  wVol.hidden = false;
-  Charts.initPanes("pane-h-stock", [
+  opts.subs = Charts.subsOf(opts);
+  delete opts.sub;
+  const wChart = document.getElementById("w-chart");
+  const wSubs = [1, 2, 3].map((i) => document.getElementById("w-sub" + i));
+  Charts.initPanes("pane-h-stock3", [
     { el: wChart, key: "price", def: 400, min: 150 },
-    { el: wVol, key: "vol", def: 120, min: 50 },
-    { el: wSub, key: "sub", def: 150, min: 60 },
+    { el: wSubs[0], key: "sub1", def: 120, min: 50 },
+    { el: wSubs[1], key: "sub2", def: 120, min: 50 },
+    { el: wSubs[2], key: "sub3", def: 120, min: 50 },
   ]);
   function saveOpts() { try { localStorage.setItem("kline-opts-v2", JSON.stringify(opts)); } catch (e) {} }
 
@@ -218,17 +223,15 @@
     tabs.querySelectorAll("button").forEach((x) => { const on = x === b; x.setAttribute("aria-pressed", String(on)); x.setAttribute("aria-selected", String(on)); });
     saveOpts();
     drawKline();
+    if (liveCtl && !"DWM".includes(opts.tf)) liveCtl.now();  // 換到分鐘線：馬上抓今天的 K 棒
   });
 
   const kctl = document.getElementById("kctl");
   const maBoxes = () => Charts.maSettings().ma.map((m, i) => '<label><input type="checkbox" data-ma="' + i + '"' + (m.on ? " checked" : "") + '><i style="background:' + m.color + '"></i>MA' + m.n + "</label>").join("");
   kctl.innerHTML =
     '<span id="ma-boxes">' + maBoxes() + "</span>" +
-    '<button type="button" class="btn ma-btn" id="ma-cfg" title="均線、均量線的天數、顏色、粗細">⚙ 均線設定</button>' +
+    '<button type="button" class="btn ma-btn" id="ma-cfg" title="副圖一、副圖二的技術指標，均線、均量線的天數、顏色、粗細">⚙ 設定</button>' +
     '<label><input type="checkbox" data-deduct' + (opts.deduct ? " checked" : "") + ">扣抵</label>" +
-    '<span class="seg" role="group" aria-label="副圖">' +
-      ["dmi:DMI", "kd:KD", "rsi:RSI", "macd:MACD", "none:不顯示"].map((s) => { const [k, t] = s.split(":"); return '<button type="button" data-sub="' + k + '" aria-pressed="' + (opts.sub === k) + '">' + t + "</button>"; }).join("") +
-    "</span>" +
     '<label class="track" title="打勾：游標移到哪根 K 棒，上方數值、扣抵就換成那一根；不打勾：游標只顯示十字線">' +
       '<input type="checkbox" data-track' + (opts.track !== false ? " checked" : "") + ">查價</label>";
   kctl.hidden = false;
@@ -246,16 +249,45 @@
   });
   kctl.addEventListener("click", (e) => {
     if (e.target.closest("#ma-cfg")) {
-      MaConfig.open(() => { document.getElementById("ma-boxes").innerHTML = maBoxes(); drawKline(); });
-      return;
+      MaConfig.open(opts.subs, (subs) => { opts.subs = subs; saveOpts(); document.getElementById("ma-boxes").innerHTML = maBoxes(); drawKline(); });
     }
-    const b = e.target.closest("button[data-sub]");
-    if (!b) return;
-    opts.sub = b.dataset.sub;
-    kctl.querySelectorAll("button[data-sub]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-    saveOpts();
-    drawCharts();
   });
+
+  // ---------- 台股盤中即時（富果）：開盤時間每 5 秒更新報價、今天的 K 棒、指標、扣抵 ----------
+  // 日線：排程檔（到昨天）＋今天這根；分鐘線：Yahoo 歷史的今天部分換成富果的今天 K 棒
+  const baseDaily = d.price, minuteToday = {};
+  var curK = null, liveQ = null, liveState = null, liveCtl = null;  // var：上面的 renderQuote 比這裡早執行
+  async function liveSeries(tf) {
+    const p = await seriesFor(tf);
+    return "DWM".includes(tf) ? p : Live.mergeMinute(p, minuteToday[tf]);
+  }
+  async function refreshKline() {
+    if (!curK) return;
+    const seq = drawSeq, k = curK, p = await liveSeries(opts.tf);
+    if (seq !== drawSeq || k !== curK) return;
+    kp = p;
+    deductShown = -1;
+    k.update(p);
+  }
+  function renderBadge() {
+    const el = document.getElementById("live-badge");
+    if (el) el.innerHTML = Live.badge(liveState);
+  }
+  if (item.code) {
+    liveCtl = Live.start(async () => {
+      const tf = opts.tf, minute = !"DWM".includes(tf);
+      const r = await Live.fetchRt([item.code], minute ? item.code : null, tf);
+      const q = r.quotes[item.code];
+      if (!q) throw new Error((r.errors && r.errors[item.code]) || "富果沒有這檔的即時資料");
+      liveQ = q;
+      d.price = Live.mergeDaily(baseDaily, q, 1000);  // 富果的量是張，日線是股
+      delete tfCache.W; delete tfCache.M;
+      if (minute && r.candles) minuteToday[tf] = r.candles;
+      renderQuote(d);
+      await refreshKline();
+      return q.date === Live.twNow().date;  // 今天沒開盤（假日）就不用一直更新
+    }, 5000, (s) => { liveState = s; renderBadge(); });
+  }
 
   let drawSeq = 0, kp = d.price;  // kp：目前畫的週期資料（扣抵表也用它）
   async function drawKline() {
@@ -263,9 +295,10 @@
     document.getElementById("k-title").textContent = "K 線（" + tfName(tf) + "）";
     const lg = document.getElementById("klegend");
     let p;
+    curK = null;
     try {
       if (tf !== "D" && tf !== "W" && tf !== "M") lg.innerHTML = '<span>讀取 ' + tfName(tf) + "線…</span>";
-      p = await seriesFor(tf);
+      p = await liveSeries(tf);
     } catch (err) {
       if (seq === drawSeq) lg.innerHTML = '<span class="down">' + App.esc(err.message) + "</span>";
       return;
@@ -274,10 +307,12 @@
     Charts.destroyKlines();
     kp = p;
     deductShown = -1;
-    const k = Charts.kline({ price: wChart, vol: wVol, sub: wSub }, { market: d.market, price: p }, opts);
+    const k = Charts.kline({ price: wChart, subs: wSubs }, { market: d.market, price: p }, opts);
+    curK = k;
     kMa = k.ma; kVolMa = k.volMa;
     const vfmt = (x, dg) => (App.isNum(x) ? App.fmtNum(x, dg == null ? 2 : dg) : "—");
     k.onCrosshair((i) => {
+      const p = kp;  // 盤中即時更新後 kp 會換成新的資料
       const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
       let html = "<span>" + Charts.timeLabel(p.dates[i]) + "</span>" +
         "<span>開 " + App.fmtPrice(p.open[i]) + " 高 " + App.fmtPrice(p.high[i]) + " 低 " + App.fmtPrice(p.low[i]) +
@@ -286,11 +321,7 @@
       const unit = d.market === "TW" ? " 張" : "";
       html += "<span>量 " + vfmt(k.values.vol[i], 0) + unit + "</span>";
       html += k.volMa.map((m) => '<span style="color:' + m.color + '">均量' + m.n + " " + vfmt(k.values["VMA" + m.n][i], 0) + "</span>").join("");
-      const C = Charts.SUB_COLORS;
-      if (opts.sub === "dmi") html += '<span class="up">+DI' + Charts.DMI_N + " " + vfmt(k.values.PDI[i]) + '</span><span class="down">−DI ' + vfmt(k.values.MDI[i]) + '</span><span style="color:#1c7ed6">ADX ' + vfmt(k.values.ADX[i]) + "</span>";
-      if (opts.sub === "kd") html += '<span style="color:' + C[0] + '">K ' + vfmt(k.values.K[i]) + '</span><span style="color:' + C[1] + '">D ' + vfmt(k.values.D[i]) + "</span>";
-      if (opts.sub === "rsi") html += '<span style="color:' + C[0] + '">RSI6 ' + vfmt(k.values.RSI6[i]) + '</span><span style="color:' + C[1] + '">RSI12 ' + vfmt(k.values.RSI12[i]) + "</span>";
-      if (opts.sub === "macd") html += '<span style="color:' + C[0] + '">DIF ' + vfmt(k.values.DIF[i], 3) + '</span><span style="color:' + C[1] + '">MACD ' + vfmt(k.values.MACD[i], 3) + '</span><span class="' + App.upDown(k.values.OSC[i]) + '">OSC ' + vfmt(k.values.OSC[i], 3) + "</span>";
+      html += k.indLegend(i);
       lg.innerHTML = html;
       renderDeductTable(i, k.volArr);  // 扣抵表也跟著游標所在的那天
     });
@@ -373,7 +404,12 @@
         "<span>殖利率 <b>" + App.fmtPct(val.dividend_yield) + "</b></span>" +
         "<span>近四季 EPS <b>" + App.fmtNum(ttm, 2) + "</b></span>" +
       "</span>" +
-      '<span class="updated">收盤 ' + App.esc(d.price.dates[n - 1]) + "・資料更新 " + App.esc(d.updated) + "</span>";
+      (liveQ
+        ? '<span class="updated">' + (liveQ.trial ? "試撮中・" : "") + (liveQ.limitUp ? '<b class="up">漲停</b>・' : "") + (liveQ.limitDown ? '<b class="down">跌停</b>・' : "") +
+          "開 " + App.fmtPrice(liveQ.open) + " 高 " + App.fmtPrice(liveQ.high) + " 低 " + App.fmtPrice(liveQ.low) +
+          "・量 " + App.fmtNum(liveQ.vol, 0) + " 張・" + App.esc(liveQ.date) + "</span>"
+        : '<span class="updated">收盤 ' + App.esc(d.price.dates[n - 1]) + "・資料更新 " + App.esc(d.updated) + "</span>") +
+      (d.market === "TW" ? ' <span id="live-badge">' + Live.badge(liveState) + "</span>" : "");
   }
 
   function renderDividends(d) {

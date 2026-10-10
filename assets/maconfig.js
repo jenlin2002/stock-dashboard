@@ -1,9 +1,16 @@
-// 「⚙ 均線設定」對話框：K 線均線、均量線的天數、顏色、粗細、開關，可新增、刪除、恢復預設。
-// 設定存在瀏覽器（Charts.saveMaSettings），個股頁和大盤頁共用。
-// MaConfig.open(onSave)：存檔後呼叫 onSave() 讓頁面重畫
+// 「⚙ 設定」對話框：副圖一、副圖二的技術指標；K 線均線、均量線的天數、顏色、粗細、開關，可新增、刪除、恢復預設。
+// 均線存在瀏覽器（Charts.saveMaSettings），副圖由頁面存（kline-opts-v2.subs），個股頁和大盤頁共用。
+// MaConfig.open(subs, onSave)：subs 是 ["vol", 副圖一, 副圖二]；存檔後呼叫 onSave(新的 subs) 讓頁面重畫
 (function () {
   const MAX = 8;
-  let dlg = null, work = null, done = null;
+  let dlg = null, work = null, done = null, subs = null;
+
+  function subsHtml() {
+    return ["副圖一", "副圖二"].map((name, j) =>
+      "<tr><td>" + name + '</td><td><select data-subi="' + (j + 1) + '" aria-label="' + name + '指標">' +
+        Charts.SUB_TYPES.map(([k, t]) => '<option value="' + k + '"' + (subs[j + 1] === k ? " selected" : "") + ">" + t + "</option>").join("") +
+      "</select></td></tr>").join("");
+  }
 
   function rowsHtml(kind) {
     return work[kind].map((m, i) =>
@@ -17,6 +24,7 @@
   }
 
   function render() {
+    dlg.querySelector('[data-list="subs"]').innerHTML = subsHtml();
     dlg.querySelector('[data-list="ma"]').innerHTML = rowsHtml("ma");
     dlg.querySelector('[data-list="vol"]').innerHTML = rowsHtml("vol");
     dlg.querySelectorAll("[data-add]").forEach((b) => { b.disabled = work[b.dataset.add].length >= MAX; });
@@ -29,13 +37,14 @@
     dlg.setAttribute("aria-labelledby", "ma-dlg-title");
     dlg.innerHTML =
       '<form method="dialog" class="dlg">' +
-        '<h3 id="ma-dlg-title">均線設定</h3>' +
+        '<h3 id="ma-dlg-title">設定</h3>' +
+        '<h4>副圖（成交量下面兩格）</h4><table class="ma-tbl"><tbody data-list="subs"></tbody></table>' +
         '<h4>K 線均線</h4><table class="ma-tbl"><thead><tr><th>顯示</th><th>天數</th><th>顏色</th><th>粗細</th><th></th></tr></thead><tbody data-list="ma"></tbody></table>' +
         '<button type="button" class="btn" data-add="ma">＋ 新增均線</button>' +
         '<h4>均量線（成交量）</h4><table class="ma-tbl"><thead><tr><th>顯示</th><th>天數</th><th>顏色</th><th>粗細</th><th></th></tr></thead><tbody data-list="vol"></tbody></table>' +
         '<button type="button" class="btn" data-add="vol">＋ 新增均量線</button>' +
         '<p class="ma-err down" role="alert"></p>' +
-        '<p class="note" style="padding:0">分鐘、週、月線的「日」就是「根」。扣抵、資訊小框、圖例都會跟著用這些均線。</p>' +
+        '<p class="note" style="padding:0">分鐘、週、月線的「日」就是「根」。扣抵、資訊小框、圖例都會跟著用這些均線。副圖和均線設定個股頁、大盤頁共用。</p>' +
         '<div class="dlg-foot"><button type="button" class="btn" data-act="reset">恢復預設</button><span style="flex:1"></span>' +
           '<button type="button" class="btn" data-act="cancel">取消</button> <button type="button" class="btn primary" data-act="save">儲存</button></div>' +
       "</form>";
@@ -43,6 +52,7 @@
 
     // 欄位變更直接寫回 work
     dlg.addEventListener("input", (e) => {
+      if (e.target.dataset.subi) { subs[+e.target.dataset.subi] = e.target.value; return; }
       const tr = e.target.closest("tr[data-kind]");
       if (!tr) return;
       const m = work[tr.dataset.kind][+tr.dataset.i], f = e.target.dataset.f;
@@ -68,6 +78,7 @@
         render();
       } else if (b.dataset.act === "reset") {
         work = JSON.parse(JSON.stringify(Charts.DEFAULT_MA));
+        subs = Charts.subsOf({});
         render();
       } else if (b.dataset.act === "cancel") {
         dlg.close();
@@ -78,7 +89,7 @@
         work.vol.sort((a, b2) => a.n - b2.n);
         Charts.saveMaSettings(work);
         dlg.close();
-        if (done) done();
+        if (done) done(subs.slice());
       }
     });
   }
@@ -95,9 +106,10 @@
     return "";
   }
 
-  function open(onSave) {
+  function open(curSubs, onSave) {
     if (!dlg) build();
     done = onSave;
+    subs = Charts.subsOf({ subs: curSubs });
     work = JSON.parse(JSON.stringify(Charts.maSettings()));
     render();
     dlg.showModal();
