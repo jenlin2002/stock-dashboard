@@ -40,6 +40,8 @@
 
   // 把頁首以下的內容（跑馬燈、main、footer）包進右側
   const header = document.querySelector(".topbar");
+  // A／B／C 版面有自己的選單：body 加 class="no-side" 就不放左側選單，只加深淺色按鈕
+  if (document.body.classList.contains("no-side")) { addThemeButton(header); return; }
   const layout = document.createElement("div");
   layout.className = "layout";
   const content = document.createElement("div");
@@ -68,22 +70,26 @@
   };
   btn.addEventListener("click", () => setOpen(!document.body.classList.contains("menu-open")));
 
-  // 深色／淺色切換（頁首最右邊）
-  const tb = document.createElement("button");
-  tb.type = "button";
-  tb.className = "theme-btn";
-  const paint = () => {
-    const dark = App.isDark();
-    tb.textContent = dark ? "☀️" : "🌙";
-    tb.title = tb.ariaLabel = dark ? "切換成淺色" : "切換成深色";
-  };
-  tb.addEventListener("click", () => App.setTheme(App.isDark() ? "light" : "dark"));
-  App.onThemeChange(paint);
-  paint();
-  header.appendChild(tb);
+  addThemeButton(header);
   layout.addEventListener("click", (e) => {
     if (!document.body.classList.contains("menu-open")) return;
     if (!aside.contains(e.target) || e.target.closest("a")) setOpen(false);
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+
+  // 深色／淺色切換（頁首最右邊）
+  function addThemeButton(header) {
+    const tb = document.createElement("button");
+    tb.type = "button";
+    tb.className = "theme-btn";
+    const paint = () => {
+      const dark = App.isDark();
+      tb.textContent = dark ? "☀️" : "🌙";
+      tb.title = tb.ariaLabel = dark ? "切換成淺色" : "切換成深色";
+    };
+    tb.addEventListener("click", () => App.setTheme(App.isDark() ? "light" : "dark"));
+    App.onThemeChange(paint);
+    paint();
+    header.appendChild(tb);
+  }
 })();
