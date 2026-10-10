@@ -21,11 +21,12 @@
   }
 
   // 新增／移除追蹤股票：呼叫 functions/api/watchlist.js（它會改 GitHub 上的 watchlist.json）
+  // item 可以是一檔，或（加入時）一個陣列：一次加入多檔、只產生一個 commit
   async function editWatchlist(action, market, item) {
     const res = await fetch("api/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, market, item }),
+      body: JSON.stringify(Array.isArray(item) ? { action, market, items: item } : { action, market, item }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || "修改失敗（" + res.status + "）");

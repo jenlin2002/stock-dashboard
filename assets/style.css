@@ -491,3 +491,31 @@ footer {
   .canvas-body, .two-col.charts-2 .body { height: 260px; }
   th, td { padding: 7px 8px; }
 }
+
+/* 我的追蹤：持股（匯入庫存） */
+#hold-btn { padding: 4px 10px; font-size: 13px; cursor: pointer; }
+.hold-sum { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+.hold-sum > div:first-child { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 14px; color: var(--muted); }
+.hold-sum b { color: var(--text); font-size: 16px; font-weight: 600; margin-left: 4px; }
+.hold-sum b.up { color: var(--up); }
+.hold-sum b.down { color: var(--down); }
+.hold-sum .updated { margin-top: 4px; }
+.hold-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; padding: 4px 14px 0; font-size: 13px; color: var(--muted); }
+.grid.view-small .hold-line { padding: 3px 10px 0; font-size: 11px; }
+.hold-dlg { width: min(680px, calc(100vw - 32px)); }
+.hold-dlg textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: 13px/1.5 ui-monospace, Consolas, monospace; resize: vertical; }
+.hold-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.hold-row .btn { cursor: pointer; }
+.hold-row #hold-parse { margin-left: auto; }
+.hold-table { max-height: 46vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.hold-table input[type=number] { width: 7.5em; padding: 3px 6px; text-align: right; }
+.hold-table input[type=checkbox] { width: auto; }
+.tag-us { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 3px; }
+.hold-opts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 14px; }
+.hold-opts label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.hold-opts input { width: auto; }
+.hold-foot { align-items: center; gap: 6px; flex-wrap: wrap; }
+.hold-cur { margin-right: auto; font-size: 13px; color: var(--muted); }
+.linkish { border: 0; background: none; padding: 0 2px; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
+.dlg details { margin-top: 8px; }
+.dlg .btn { cursor: pointer; }

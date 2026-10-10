@@ -22,6 +22,7 @@
       <button type="button" role="tab" data-mk="us">美股</button>
     </div>
     <span id="tw-live"></span>
+    <button type="button" class="btn" id="hold-btn">📥 匯入庫存</button>
     <div class="view-wrap">
     <span class="view-label" id="view-label">畫面顯示：</span>
     <div class="seg view-btns" role="group" aria-labelledby="view-label">
@@ -39,10 +40,12 @@
   </div>
   <!-- 每個市場一個分頁：方塊模式看 .grid，清單模式看 .list-pane（欄位與全台股總表相同＋近一年走勢） -->
   <section id="pane-tw" role="tabpanel">
+    <div class="hold-sum" id="tw-hsum" hidden></div>
     <div class="grid" id="tw"></div>
     <div class="list-pane" id="tw-list"></div>
   </section>
   <section id="pane-us" role="tabpanel" hidden>
+    <div class="hold-sum" id="us-hsum" hidden></div>
     <div class="grid" id="us"></div>
     <div class="list-pane" id="us-list"></div>
   </section>
@@ -58,6 +61,38 @@
   </form>
 </dialog>
 
+<!-- 匯入庫存：持股只存在這台裝置的瀏覽器（assets/holdings.js） -->
+<dialog id="hold-dlg" class="hold-dlg" aria-labelledby="hold-title">
+  <form method="dialog" class="dlg">
+    <h3 id="hold-title">匯入庫存</h3>
+    <p class="updated">持股只存在這台裝置的瀏覽器，不會上傳到 GitHub。換電腦或手機要再匯入一次，可以用「備份」存成 CSV 帶過去。</p>
+    <div id="hold-step1">
+      <textarea id="hold-text" rows="7" spellcheck="false" aria-label="貼上庫存"
+        placeholder="在 YesWin／XQ 的庫存表格全選複製，貼在這裡（含標題列）。&#10;也可以自己打，一行一檔：代號 股數 成本均價&#10;2330 1000 550.5&#10;0050 2000&#10;AAPL 10 180"></textarea>
+      <div class="hold-row">
+        <label class="btn">選擇檔案<input type="file" id="hold-file" accept=".csv,.txt,.xls,.xlsx,.pdf" hidden></label>
+        <span class="updated">CSV、Excel、集保 e 手掌握 PDF</span>
+        <button type="button" class="btn primary" id="hold-parse">解析</button>
+      </div>
+    </div>
+    <div id="hold-step2" hidden>
+      <div id="hold-preview"></div>
+      <div class="hold-opts">
+        <label><input type="radio" name="hold-mode" value="replace" checked> 取代目前持股</label>
+        <label><input type="radio" name="hold-mode" value="merge"> 和目前持股相加</label>
+        <label id="hold-addw-wrap"><input type="checkbox" id="hold-addw" checked> <span id="hold-addw-text"></span></label>
+      </div>
+    </div>
+    <p id="hold-msg" class="updated" role="status"></p>
+    <div class="dlg-foot hold-foot">
+      <span class="hold-cur" id="hold-cur"></span>
+      <button type="button" class="btn" id="hold-back" hidden>重新貼上</button>
+      <button class="btn" value="cancel">關閉</button>
+      <button type="button" class="btn primary" id="hold-save" hidden>匯入</button>
+    </div>
+  </form>
+</dialog>
+
 <footer>
   資料僅供參考，不構成投資建議。資料來源：TradingView、FinMind、公開資訊觀測站、SEC、Yahoo Finance。
 </footer>
@@ -69,6 +104,7 @@
 <script src="assets/refs.js"></script>
 <script src="assets/stockcols.js"></script>
 <script src="assets/live.js"></script>
+<script src="assets/holdings.js"></script>
 <script>
 (async function () {
   let w;
@@ -81,6 +117,8 @@
   ownTape(document.getElementById("tape"));
   const twCards = new Map();  // 台股代號 → 卡片的走勢區（盤中即時更新用）
   const lastQ = {};           // 台股代號 → 最新的富果即時報價
+  const hold = Holdings.load();   // 持股（只存在這台裝置）
+  const px = { tw: {}, us: {} };  // 持股損益用的最新股價
 
   function addCards(list, el, m) {
     for (const item of list) {
@@ -88,7 +126,8 @@
       const a = document.createElement("a");
       a.className = "card";
       a.href = "stock.html?symbol=" + encodeURIComponent(sym) + "&m=" + m;
-      a.innerHTML = '<div class="card-head"><strong></strong><span></span></div><div class="mini"></div>' +
+      a.innerHTML = '<div class="card-head"><strong></strong><span></span></div>' +
+        (hold[m][sym] ? '<div class="hold-line" data-k="' + m + ":" + App.esc(sym) + '"></div>' : "") + '<div class="mini"></div>' +
         '<button type="button" class="rm" title="從追蹤清單移除">×</button>';
       a.querySelector("strong").textContent = item.name;
       a.querySelector("span").textContent = sym;
@@ -199,6 +238,7 @@
     try { d = await stockData(item); } catch (e) { return TV.miniOverview(host, item); }
     const c = d.price.close.slice(-250), dates = d.price.dates.slice(-250), n = c.length;
     if (n < 2) return TV.miniOverview(host, item);
+    setPx(App.marketOf(item), App.symbolOf(item), c[n - 1]);
     const diff = c[n - 1] - c[n - 2], pct = diff / c[n - 2] * 100;
     const yearCls = App.upDown(c[n - 1] - c[0]);
     const min = Math.min(...c), max = Math.max(...c), W = 300, H = 100;
@@ -213,6 +253,214 @@
         "</svg>" +
       "</div>";
   }
+
+  // ---------- 持股：股數、成本、損益（只存在這台裝置的瀏覽器） ----------
+  // 價格來源：盤中即時 > 個股日 K 最後一筆 > 全台股總表／summary.json（不在追蹤清單的持股也用得到）
+  function setPx(m, code, p, weak) {
+    if (!App.isNum(p) || (weak && App.isNum(px[m][code]))) return;
+    if (px[m][code] === p) return;
+    px[m][code] = p;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(renderHold, 50);
+  }
+  let holdTimer;
+  async function loadHoldPrices() {
+    if (Holdings.count(hold, "tw")) {
+      try { const all = await Refs.load(); for (const code of Object.keys(hold.tw)) setPx("tw", code, all.byCode[code] && all.byCode[code].close, true); } catch (e) {}
+    }
+    if (Holdings.count(hold, "us")) {
+      try {
+        const sum = await App.loadJSON("data/summary.json");
+        for (const x of sum.stocks || []) if (x.market === "US" && hold.us[x.symbol]) setPx("us", x.symbol, x.price, true);
+      } catch (e) {}
+    }
+    renderHold();
+  }
+  const money = (m, n, signed) => (App.isNum(n) ? (signed && n > 0 ? "+" : n < 0 ? "−" : "") + (m === "us" ? "$" : "") + App.fmtNum(Math.abs(n), m === "us" ? 2 : 0) : "—");
+  const shareFmt = (n) => (App.isNum(n) ? n.toLocaleString("zh-TW", { maximumFractionDigits: 4 }) : "—");
+  function plHtml(m, c) {
+    if (!App.isNum(c.pl)) return '<span class="updated">損益 —</span>';
+    return '<span class="' + App.upDown(c.pl) + '">損益 ' + money(m, c.pl, true) + "（" + App.fmtPct(c.pct, true) + "）</span>";
+  }
+  function holdingCols(m) {
+    return [
+      { k: "h_shares", t: "持股(股)", f: (s) => shareFmt(s.h_shares) },
+      { k: "h_avg", t: "成本均價", asc: true, f: (s) => (App.isNum(s.h_avg) ? (m === "us" ? "$" : "") + App.fmtNum(s.h_avg, 2) : "—") },
+      { k: "h_mv", t: "持股市值", f: (s) => money(m, s.h_mv) },
+      { k: "h_pl", t: "未實現損益", f: (s) => '<span class="' + App.upDown(s.h_pl) + '">' + money(m, s.h_pl, true) + "</span>" },
+      { k: "h_pct", t: "報酬率", f: (s) => StockCols.pctCell(s.h_pct) },
+    ];
+  }
+  function renderHold() {
+    // 卡片上的持股列
+    document.querySelectorAll(".hold-line").forEach((el) => {
+      const [m, code] = el.dataset.k.split(":");
+      const e = hold[m][code];
+      if (!e) return;
+      const c = Holdings.calc(e, px[m][code]);
+      el.innerHTML = "<span>持有 " + shareFmt(e.shares) + " 股" + (App.isNum(c.avg) ? "・均 " + App.fmtNum(c.avg, 2) : "") + "</span> " + plHtml(m, c);
+    });
+    // 每個分頁上方的總計
+    for (const m of ["tw", "us"]) {
+      const el = document.getElementById(m + "-hsum"), codes = Object.keys(hold[m]);
+      el.hidden = !codes.length;
+      if (!codes.length) continue;
+      let mv = 0, cost = 0, mvC = 0, noPx = 0, noCost = 0;
+      const inW = new Set(w[m].map((x) => App.symbolOf(x).toUpperCase()));
+      for (const code of codes) {
+        const e = hold[m][code], p = px[m][code];
+        if (!App.isNum(p)) { noPx++; continue; }
+        mv += p * e.shares;
+        if (App.isNum(e.cost) && e.cost > 0) { cost += e.cost; mvC += p * e.shares; } else noCost++;
+      }
+      const pl = cost ? mvC - cost : null;
+      const notes = [];
+      const outside = codes.filter((c) => !inW.has(c)).length;
+      if (outside) notes.push(outside + " 檔不在追蹤清單");
+      if (noPx) notes.push(noPx + " 檔沒有股價，未計入");
+      if (noCost) notes.push(noCost + " 檔沒有成本，損益未計入");
+      notes.push("損益未扣賣出手續費與稅");
+      el.innerHTML =
+        "<div><span>持股 <b>" + codes.length + "</b> 檔</span>" +
+        "<span>市值 <b>" + money(m, mv) + "</b></span>" +
+        "<span>成本 <b>" + (cost ? money(m, cost) : "—") + "</b></span>" +
+        '<span>未實現損益 <b class="' + App.upDown(pl) + '">' + (pl == null ? "—" : money(m, pl, true) + "（" + App.fmtPct(pl / cost * 100, true) + "）") + "</b></span></div>" +
+        '<div class="updated">' + notes.join("・") + "</div>";
+    }
+  }
+
+  // 匯入對話框
+  const hd = {
+    dlg: document.getElementById("hold-dlg"), text: document.getElementById("hold-text"), file: document.getElementById("hold-file"),
+    step1: document.getElementById("hold-step1"), step2: document.getElementById("hold-step2"), preview: document.getElementById("hold-preview"),
+    msg: document.getElementById("hold-msg"), save: document.getElementById("hold-save"), back: document.getElementById("hold-back"),
+    cur: document.getElementById("hold-cur"), addw: document.getElementById("hold-addw"), addwWrap: document.getElementById("hold-addw-wrap"),
+    addwText: document.getElementById("hold-addw-text"),
+  };
+  let parsed = null, holdBusy = false;
+  function holdStep(n) {
+    hd.step1.hidden = n !== 1; hd.step2.hidden = n !== 2;
+    hd.save.hidden = n !== 2; hd.back.hidden = n !== 2;
+  }
+  function holdCur() {
+    const t = Holdings.count(hold, "tw"), u = Holdings.count(hold, "us");
+    hd.cur.innerHTML = t + u ? "目前持股：台股 " + t + "、美股 " + u + ' 檔 <button type="button" class="linkish" data-act="backup">備份</button> <button type="button" class="linkish" data-act="clear">清除</button>' : "目前沒有持股資料";
+  }
+  document.getElementById("hold-btn").addEventListener("click", () => {
+    holdStep(1); hd.msg.textContent = ""; hd.file.value = ""; holdCur();
+    hd.dlg.showModal();
+    App.loadStockList().catch(() => {});
+  });
+  hd.cur.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "backup") {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([Holdings.toCsv(hold)], { type: "text/csv" }));
+      a.download = "持股備份_" + new Date().toISOString().slice(0, 10) + ".csv";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } else if (confirm("清除這台裝置上的全部持股資料？（追蹤清單不受影響）")) {
+      hold.tw = {}; hold.us = {};
+      try { Holdings.save(hold); } catch (err) {}
+      location.reload();
+    }
+  });
+  async function runParse(getRows) {
+    hd.msg.textContent = "解析中…";
+    try {
+      const [rows, list] = await Promise.all([getRows(), App.loadStockList()]);
+      parsed = Holdings.parseRows(rows, list);
+    } catch (err) { hd.msg.textContent = "⚠ " + err.message; return; }
+    if (!parsed.items.length) {
+      hd.msg.textContent = "⚠ 找不到持股。" + (parsed.skipped.length ? "略過：" + parsed.skipped.slice(0, 3).map((x) => x.text.slice(0, 30) + "（" + x.why + "）").join("；") : "") + " 請確認有代號或名稱、股數兩欄。";
+      return;
+    }
+    hd.msg.textContent = "";
+    showPreview();
+  }
+  document.getElementById("hold-parse").addEventListener("click", () => {
+    if (!hd.text.value.trim()) { hd.msg.textContent = "請先貼上庫存，或選擇檔案。"; return; }
+    runParse(async () => Holdings.textRows(hd.text.value));
+  });
+  hd.file.addEventListener("change", () => { if (hd.file.files[0]) runParse(() => Holdings.fileRows(hd.file.files[0])); });
+  hd.back.addEventListener("click", () => { holdStep(1); hd.msg.textContent = ""; hd.file.value = ""; });
+
+  function showPreview() {
+    const inW = { tw: new Set(w.tw.map((x) => x.code)), us: new Set(w.us.map((x) => x.ticker.toUpperCase())) };
+    hd.preview.innerHTML =
+      '<div class="table-wrap hold-table"><table><thead><tr><th></th><th class="l">代號</th><th class="l">名稱</th><th>股數</th><th>成本均價</th><th>總成本</th></tr></thead><tbody>' +
+      parsed.items.map((it, i) =>
+        '<tr data-i="' + i + '"><td><input type="checkbox" checked aria-label="匯入 ' + App.esc(it.name) + '"></td>' +
+        '<td class="l">' + App.esc(it.code) + (it.m === "us" ? ' <span class="tag-us">美</span>' : "") + "</td>" +
+        '<td class="l">' + App.esc(it.name) + (inW[it.m].has(it.code) ? "" : ' <span class="updated">新</span>') + "</td>" +
+        '<td><input type="number" class="h-sh" min="0" step="any" value="' + it.shares + '" aria-label="股數"></td>' +
+        '<td><input type="number" class="h-avg" min="0" step="any" value="' + (it.cost != null ? +(it.cost / it.shares).toFixed(4) : "") + '" placeholder="不填" aria-label="成本均價"></td>' +
+        '<td class="h-cost">' + (it.cost != null ? money(it.m, it.cost) : "—") + "</td></tr>").join("") +
+      "</tbody></table></div>" +
+      (parsed.skipped.length ? '<details class="updated"><summary>略過 ' + parsed.skipped.length + " 列</summary>" +
+        parsed.skipped.map((x) => "<div>" + App.esc(x.text.slice(0, 60)) + "（" + x.why + "）</div>").join("") + "</details>" : "");
+    hd.preview.oninput = (e) => {
+      const tr = e.target.closest("tr[data-i]");
+      if (!tr) return;
+      const it = parsed.items[+tr.dataset.i];
+      const sh = parseFloat(tr.querySelector(".h-sh").value), avg = parseFloat(tr.querySelector(".h-avg").value);
+      if (e.target.classList.contains("h-sh")) {
+        const oldAvg = it.cost != null ? it.cost / it.shares : null;
+        if (sh > 0) { it.shares = sh; if (oldAvg != null) it.cost = oldAvg * sh; }
+      } else if (e.target.classList.contains("h-avg")) {
+        it.cost = avg > 0 ? avg * it.shares : null;
+      }
+      tr.querySelector(".h-cost").textContent = it.cost != null ? money(it.m, it.cost) : "—";
+      updateAddw();
+    };
+    hd.preview.onchange = updateAddw;
+    updateAddw();
+    holdStep(2);
+  }
+  function chosen() {
+    return [...hd.preview.querySelectorAll("tr[data-i]")].filter((tr) => tr.querySelector("input[type=checkbox]").checked).map((tr) => parsed.items[+tr.dataset.i]);
+  }
+  function newOnes() {
+    const inW = { tw: new Set(w.tw.map((x) => x.code)), us: new Set(w.us.map((x) => x.ticker.toUpperCase())) };
+    return chosen().filter((it) => !inW[it.m].has(it.code));
+  }
+  function updateAddw() {
+    const n = newOnes().length;
+    hd.addwWrap.hidden = !n;
+    hd.addwText.textContent = "不在追蹤清單的 " + n + " 檔一起加入追蹤清單";
+    hd.save.textContent = "匯入 " + chosen().length + " 檔";
+  }
+  hd.save.addEventListener("click", async () => {
+    if (holdBusy) return;
+    const items = chosen();
+    if (!items.length) { hd.msg.textContent = "請至少勾選一檔。"; return; }
+    const mode = hd.dlg.querySelector('input[name="hold-mode"]:checked').value;
+    const next = { tw: mode === "replace" ? {} : Object.assign({}, hold.tw), us: mode === "replace" ? {} : Object.assign({}, hold.us) };
+    for (const it of items) {
+      const prev = next[it.m][it.code];
+      const e = { name: it.name, shares: it.shares, cost: it.cost };
+      if (it.m === "tw") e.market = it.market; else e.exchange = it.exchange;
+      if (prev) { e.shares += prev.shares; e.cost = prev.cost != null && it.cost != null ? prev.cost + it.cost : null; }
+      next[it.m][it.code] = e;
+    }
+    try { Holdings.save(next); } catch (err) { hd.msg.textContent = "⚠ 瀏覽器不能儲存（可能是無痕模式）：" + err.message; return; }
+    const add = hd.addw.checked ? newOnes() : [];
+    if (!add.length) { hd.msg.textContent = "已匯入 " + items.length + " 檔。"; setTimeout(() => location.reload(), 600); return; }
+    holdBusy = true;
+    hd.msg.textContent = "持股已存好。加入追蹤清單中…";
+    try {
+      for (const m of ["tw", "us"]) {
+        const list = add.filter((it) => it.m === m).map((it) => (m === "tw" ? { code: it.code, name: it.name, market: it.market } : { ticker: it.code, name: it.name, exchange: it.exchange }));
+        if (list.length) await App.editWatchlist("add", m, list);
+      }
+      hd.msg.textContent = "已匯入 " + items.length + " 檔，新增 " + add.length + " 檔到追蹤清單（完整資料約 2～3 分鐘後產生）。";
+      setTimeout(() => location.reload(), 1500);
+    } catch (err) {
+      hd.msg.textContent = "持股已存好，但加入追蹤清單失敗：" + err.message;
+      holdBusy = false;
+    }
+  });
 
   addCards(w.tw, document.getElementById("tw"), "tw");
   addCards(w.us, document.getElementById("us"), "us");
@@ -283,8 +531,14 @@
     const base = m === "tw" ? StockCols.tw(listState.tw.pegLv || {}) : StockCols.us();
     // 走勢圖放在「漲跌」後面
     const at = base.findIndex((c) => c.k === "change_pct") + 1;
-    const cols = base.slice(0, at).concat([{ k: "_spark", t: "近一年走勢", nosort: true, f: (s) => '<span class="sp" data-sym="' + App.esc(s.code) + '"></span>' }], base.slice(at));
+    const holdCols = Holdings.count(hold, m) ? holdingCols(m) : [];
+    const cols = base.slice(0, at).concat([{ k: "_spark", t: "近一年走勢", nosort: true, f: (s) => '<span class="sp" data-sym="' + App.esc(s.code) + '"></span>' }], holdCols, base.slice(at));
     const st = listState[m];
+    rows.forEach((s) => {
+      setPx(m, s.code, s.close, true);
+      const e = hold[m][s.code], c = Holdings.calc(e, s.close);
+      Object.assign(s, { h_shares: e ? e.shares : null, h_avg: c.avg, h_mv: c.mv, h_pl: c.pl, h_pct: c.pct });
+    });
     const oldWrap = host.querySelector(".table-wrap"), scrollX = oldWrap ? oldWrap.scrollLeft : 0;  // 即時更新重畫時保留左右捲動位置
     let list = rows.slice();
     if (st.key) {
@@ -342,6 +596,7 @@
   let first = /^#(tw|us)$/.test(location.hash) ? location.hash.slice(1) : null;
   if (!first) { try { first = localStorage.getItem("watch-tab"); } catch (e) {} }
   showTab(first === "us" ? "us" : "tw");
+  if (Holdings.count(hold, "tw") || Holdings.count(hold, "us")) loadHoldPrices();
 
   // ---------- 台股盤中即時（富果）：卡片、清單的股價、漲跌、成交量 ----------
   // 富果免費方案每分鐘 60 次、每檔算一次：間隔隨檔數拉長（約每分鐘用 30 次，留額度給個股頁）
@@ -359,6 +614,7 @@
       for (const it of w.tw) {
         const q = lastQ[it.code];
         if (!q) continue;
+        setPx("tw", it.code, q.price);
         const key = "tw:" + it.code;
         const d = dataCache[key] && await dataCache[key].catch(() => null);
         if (d) {

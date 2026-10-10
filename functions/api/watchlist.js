@@ -1,4 +1,5 @@
 // Cloudflare Pages Function：POST /api/watchlist  {action: "add" | "remove", market: "tw" | "us", item}
+//   一次加入多檔（匯入庫存用，只產生一個 commit）：{action: "add", market, items: [item, ...]}
 // 直接修改 GitHub 上的 config/watchlist.json（commit 到 main）→ 觸發排程抓資料、Cloudflare 重新部署。
 // 環境變數（Cloudflare Pages → Settings → Variables and Secrets，類型 Secret）：
 //   GITHUB_TOKEN：fine-grained personal access token，只授權 stock-dashboard 這個 repo 的 Contents: Read and write
@@ -23,10 +24,13 @@ export async function onRequestPost(ctx) {
   try { body = await request.json(); } catch (e) { return json({ error: "格式錯誤" }, 400); }
   const { action, market } = body || {};
   if (!["add", "remove"].includes(action) || !["tw", "us"].includes(market)) return json({ error: "格式錯誤" }, 400);
-  const item = clean(market, body.item || {});
-  if (!item) return json({ error: "股票資料不正確" }, 400);
-  const sym = market === "tw" ? item.code : item.ticker;
-  const same = (x) => (market === "tw" ? x.code === sym : String(x.ticker).toUpperCase() === sym);
+  const many = action === "add" && Array.isArray(body.items);
+  const items = (many ? body.items.slice(0, 200) : [body.item || {}]).map((x) => clean(market, x));
+  if (!items.length || items.some((x) => !x)) return json({ error: "股票資料不正確" }, 400);
+  const item = items[0];
+  const symOf = (x) => (market === "tw" ? x.code : String(x.ticker).toUpperCase());
+  const sym = symOf(item);
+  const same = (x) => symOf(x) === sym;
 
   const repo = env.GITHUB_REPO || "jenlin2002/stock-dashboard";
   // 兩人（或兩個分頁）同時改會撞到 sha，重試一次
@@ -43,10 +47,14 @@ export async function onRequestPost(ctx) {
 
     let message;
     if (action === "add") {
-      if (list.some(same)) return json({ ok: true, unchanged: true, watchlist: w });
-      list.push(item);
+      const have = new Set(list.map(symOf));
+      const add = [];
+      for (const x of items) if (!have.has(symOf(x))) { have.add(symOf(x)); add.push(x); }
+      if (!add.length) return json({ ok: true, unchanged: true, watchlist: w });
+      list.push(...add);
       if (market === "tw") list.sort((a, b) => (a.code < b.code ? -1 : 1));  // 台股依代號排
-      message = "追蹤清單：新增 " + sym + " " + item.name;
+      message = add.length === 1 ? "追蹤清單：新增 " + symOf(add[0]) + " " + add[0].name
+        : "追蹤清單：匯入庫存，新增 " + add.length + " 檔（" + add.map(symOf).join("、") + "）";
     } else {
       const before = list.length;
       w[market] = list.filter((x) => !same(x));
