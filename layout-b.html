@@ -5,27 +5,152 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>B 分頁工作台｜台美股看盤</title>
-<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<!-- B 版預設淺色；使用者手動切過（localStorage theme）就照使用者的 -->
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("theme") || "light"; } catch (e) { document.documentElement.dataset.theme = "light"; }</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
-<body>
+<body class="no-side lp lp-b">
 <header class="topbar">
   <h1><a href="index.html?home=1">台美股看盤</a></h1>
   <nav><a href="watchlist.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 
-<main class="wide">
-  <section class="panel">
-    <h3>B 分頁工作台（建置中）</h3>
-    <p class="note">這個版面依 LAYOUT-SPEC.md 第 9 節的順序製作中。現有功能都在左側選單：大盤、全台股總表、個股分析、我的追蹤、比較表。</p>
-  </section>
+<!-- 分頁（#hash 切換，不重新載入）＋目前個股 -->
+<div class="lp-bar">
+  <nav class="lp-menu" role="tablist" aria-label="B 分頁" id="b-tabs">
+    <a href="#overview" data-t="overview">總覽</a><a href="#market" data-t="market">大盤</a><a href="#sector" data-t="sector">類股</a>
+    <a href="#fundamental" data-t="fundamental">基本面</a><a href="#technical" data-t="technical">技術面</a><a href="#chips" data-t="chips">籌碼面</a>
+    <a href="#screener" data-t="screener">選股器</a><a href="#watch" data-t="watch">自選股</a><a href="#calendar" data-t="calendar">行事曆</a>
+  </nav>
+  <label class="b-cur"><span class="updated">目前個股</span><input type="search" id="b-pick" aria-label="換個股：輸入代號或名稱"></label>
+</div>
+
+<main>
+  <div class="b-pane" data-pane="overview" hidden>
+    <div class="b-two">
+      <section class="panel" data-widget="marketCard" data-market="tw"></section>
+      <section class="panel" data-widget="marketCard" data-market="us"></section>
+    </div>
+    <section class="panel" data-widget="sectorRank" data-top="10"></section>
+    <section class="panel" id="b-faces" data-widget="stockFaces" data-follow="true"></section>
+    <section class="panel"><div class="w-head"><h3>選股器</h3><a class="updated" href="#screener">完整選股器 →</a></div><div data-widget="screenerForm"></div></section>
+    <div class="b-two">
+      <section class="panel" data-widget="watchlist"></section>
+      <section class="panel" data-widget="calendar"></section>
+    </div>
+  </div>
+  <div class="b-pane" data-pane="market" hidden>
+    <section data-widget="kpis" data-market="both"></section>
+    <section data-widget="kline" data-market="idx" data-symbol="TWII"></section>
+    <section data-widget="kline" data-market="idx" data-symbol="GSPC"></section>
+  </div>
+  <div class="b-pane" data-pane="sector" hidden>
+    <section class="panel" data-widget="sectorRank"></section>
+    <section class="panel" data-widget="heatmap" data-market="tw" data-view="sector"></section>
+    <section class="panel" data-widget="heatmap" data-market="us" data-view="sector"></section>
+  </div>
+  <div class="b-pane" data-pane="fundamental" hidden>
+    <section class="panel"><div class="w-head"><h3>PEG 評分卡</h3><span class="updated">目前個股</span></div><div data-widget="pegCard" data-follow="true"></div></section>
+    <section class="panel" data-widget="screener"></section>
+    <p class="note">完整的全台股總表（可匯出 Excel）在 <a href="all.html">全台股總表</a>。</p>
+  </div>
+  <div class="b-pane" data-pane="technical" hidden>
+    <section data-widget="kline" data-follow="true"></section>
+  </div>
+  <div class="b-pane" data-pane="chips" hidden>
+    <section class="panel" data-widget="chips"></section>
+    <section class="panel"><div class="w-head"><h3>個股籌碼</h3></div><p class="note" style="padding:0 14px 12px">— 個股外資／投信 5 日、融資增減、大戶持股、借券：資料待補（FinMind，LAYOUT-SPEC 第 7 步）。</p></section>
+  </div>
+  <div class="b-pane" data-pane="screener" hidden>
+    <section class="panel"><div class="w-head"><h3>選股器</h3></div><div data-widget="screenerForm"></div></section>
+  </div>
+  <div class="b-pane" data-pane="watch" hidden>
+    <section class="panel" data-widget="watchlist"></section>
+    <p class="note">匯入／匯出、改分頁名稱、成本與損益明細在 <a href="watchlist.html#hold">我的追蹤</a>；比較多檔在 <a href="compare.html">比較表</a>。</p>
+  </div>
+  <div class="b-pane" data-pane="calendar" hidden>
+    <section class="panel" data-widget="calendar"></section>
+  </div>
 </main>
 
-<footer>資料僅供參考，不構成投資建議。</footer>
+<footer>資料僅供參考，不構成投資建議。資料來源：FinMind、證交所、櫃買中心、期交所、公開資訊觀測站、SEC、Yahoo Finance、Nasdaq、富果。</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/layout.js"></script>
 <script src="assets/layout-switch.js"></script>
 <script src="assets/search.js"></script>
+<script src="assets/indicators.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/maconfig.js"></script>
+<script src="assets/live.js"></script>
+<script src="assets/refs.js"></script>
+<script src="assets/holdings.js"></script>
+<script src="assets/heatmap.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/mount.js"></script>
+<script src="assets/widgets/addfav.js"></script>
+<script src="assets/widgets/stockpicker.js"></script>
+<script src="assets/widgets/marketcard.js"></script>
+<script src="assets/widgets/sectorrank.js"></script>
+<script src="assets/widgets/stockfaces.js"></script>
+<script src="assets/widgets/screenerform.js"></script>
+<script src="assets/widgets/screener.js"></script>
+<script src="assets/widgets/kpis.js"></script>
+<script src="assets/widgets/deduct.js"></script>
+<script src="assets/widgets/kline.js"></script>
+<script src="assets/widgets/heatmap.js"></script>
+<script src="assets/widgets/pegcard.js"></script>
+<script src="assets/widgets/chips.js"></script>
+<script src="assets/widgets/watchlist.js"></script>
+<script src="assets/widgets/calendar.js"></script>
+<script>
+(function () {
+  // 狀態：目前個股（網址 ?symbol=，沒有就用上次看的）、市場（網址 ?market=，個股用）
+  const q = new URLSearchParams(location.search);
+  let symbol = (q.get("symbol") || (() => { try { return localStorage.getItem("last-symbol"); } catch (e) { return null; } })() || "2330").toUpperCase();
+  let market = q.get("market");
+  if (!["tw", "us", "both"].includes(market)) market = /^\d/.test(symbol) ? "tw" : "us";
+  LayoutSwitch.setState({ market, symbol });
+  const pick = document.getElementById("b-pick");
+  pick.placeholder = symbol + "（輸入代號或名稱換股）";
+  const ctx = () => ({ market: market === "both" ? (/^\d/.test(symbol) ? "tw" : "us") : market, symbol });
+
+  // 換個股：所有已掛載、跟著個股的區塊更新；網址、切版面、個股頁「最後看的」都跟著換
+  function setSymbol(m, s) {
+    symbol = s.toUpperCase(); market = m;
+    try { localStorage.setItem("last-symbol", symbol); } catch (e) {}
+    LayoutSwitch.setState({ market, symbol });
+    const u = new URL(location.href);
+    u.searchParams.set("symbol", symbol); u.searchParams.set("market", market);
+    history.replaceState(null, "", u);
+    pick.placeholder = symbol + "（輸入代號或名稱換股）";
+    document.querySelectorAll('[data-follow="true"]').forEach((el) => { if (el._widget && el._widget.update) el._widget.update(Object.assign({ forceSymbol: true }, ctx())); });
+  }
+  StockPicker.attach(pick, (r) => setSymbol(r.market, r.symbol));
+  // 自選股、選股器點一檔：換成目前個股，跳到總覽的四面分析
+  document.addEventListener("sd:pick", (e) => {
+    e.preventDefault();
+    setSymbol(e.detail.market, e.detail.symbol);
+    if (location.hash !== "#overview") location.hash = "#overview";
+    setTimeout(() => document.getElementById("b-faces").scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  });
+
+  // 分頁：第一次打開才掛載裡面的區塊（藏起來時量不到大小，熱力圖、K 線會畫錯）
+  const panes = document.querySelectorAll(".b-pane"), tabs = document.querySelectorAll("#b-tabs a");
+  function show() {
+    let t = location.hash.slice(1);
+    if (![...panes].some((p) => p.dataset.pane === t)) t = "overview";
+    panes.forEach((p) => {
+      p.hidden = p.dataset.pane !== t;
+      if (!p.hidden && !p.dataset.mounted) { p.dataset.mounted = "1"; Widgets.mount(p, ctx()); }
+      else if (!p.hidden) p.querySelectorAll('[data-follow="true"]').forEach((el) => { if (el._widget && el._widget.update) el._widget.update(Object.assign({ forceSymbol: true }, ctx())); });
+    });
+    tabs.forEach((a) => { const on = a.dataset.t === t; a.setAttribute("aria-current", String(on)); a.setAttribute("aria-selected", String(on)); });
+  }
+  window.addEventListener("hashchange", show);
+  show();
+})();
+</script>
 </body>
 </html>
