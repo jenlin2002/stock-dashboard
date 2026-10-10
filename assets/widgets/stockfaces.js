@@ -39,6 +39,8 @@
     return row("外資連" + (s.fi_days >= 0 ? "買" : "賣"), isNum(s.fi_days) ? Math.abs(s.fi_days) + " 日" : "—", App.upDown(s.fi_days)) +
       row("外資 5 日", lots(s.fi_5), App.upDown(s.fi_5)) + row("投信 5 日", lots(s.it_5), App.upDown(s.it_5)) + row("自營商 5 日", lots(s.dl_5), App.upDown(s.dl_5)) +
       row("融資 1 日增減", lots(s.mg_chg)) + row("融資 5 日增減", lots(s.mg_chg5)) +
+      row("大戶持股（≥1,000 張）", isNum(s.big_pct) ? App.fmtNum(s.big_pct, 2) + "%" + (isNum(s.big_chg) ? "（週 " + (s.big_chg > 0 ? "+" : "") + App.fmtNum(s.big_chg, 2) + "）" : "") : "—", App.upDown(s.big_chg)) +
+      row("借券賣出餘額", isNum(s.sbl) ? App.fmtNum(s.sbl, 0) + " 張" + (isNum(s.sbl_chg5) ? "（5 日 " + lots(s.sbl_chg5) + "）" : "") : "—") +
       (isNum(s.eps_up_q) ? row("單季 EPS 年增", s.eps_up_q + " 季連續" + (isNum(s.eps_q_yoy) ? "（最新 " + App.fmtPct(s.eps_q_yoy, true) + "）" : ""), s.eps_up_q >= 3 ? "up" : "") : "");
   }
   window.StockFaces = { technical, chips };  // C 版個股抽屜也用

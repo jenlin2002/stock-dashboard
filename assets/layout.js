@@ -8,7 +8,7 @@
     { icon: "💰", label: "類股資金流向", href: "flow.html", ready: false, subs: [["類股成交比重", "#share"], ["法人進出排行", "#rank"]] },
     { icon: "📋", label: "全台股總表", href: "all.html", ready: true, subs: [["依股號", "all.html"], ["依產業", "all.html?view=industry"]] },
     { icon: "🔍", label: "個股分析", href: "stock.html?symbol=" + encodeURIComponent(lastSymbol), page: "stock", ready: true,
-      subs: [["PEG 評分卡", "#p-refs"], ["K 線・指標", "#p-kline"], ["月營收", "#p-revenue"], ["季度財報", "#p-quarterly"], ["股利", "#p-div"]] },
+      subs: [["PEG 評分卡", "#p-refs"], ["籌碼", "#p-chips"], ["K 線・指標", "#p-kline"], ["月營收", "#p-revenue"], ["季度財報", "#p-quarterly"], ["股利", "#p-div"]] },
     { icon: "⭐", label: "我的追蹤", href: "watchlist.html", ready: true, subs: [["台股", "watchlist.html#tw"], ["美股", "watchlist.html#us"], ["比較表", "compare.html"]] },
   ];
 

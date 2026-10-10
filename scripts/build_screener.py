@@ -43,6 +43,8 @@ FIELDS = [
     "mg_chg", "mg_chg5",            # 融資餘額 1 日、5 日增減（張）
     "eps_q", "eps_q_yoy",           # 最新一季單季 EPS、和去年同季比 %
     "eps_up_q",                     # 單季 EPS 連續年增的季數（和去年同季比）
+    "big_pct", "big_chg",           # 大戶（持股 1,000 張以上）持股比例 %、和上週比（百分點）；集保每週
+    "sbl", "sbl_chg5",              # 借券賣出餘額（張）、5 日增減
 ]
 
 s = requests.Session()
@@ -169,6 +171,53 @@ def day_margin(d):
             if v is not None:
                 out[r[0].strip()] = round(v)
     return out or None
+
+
+def day_sbl(d):
+    """{code: 借券賣出當日餘額（張）}：證交所 TWT93U、櫃買 margin/sbl（兩邊欄位順序一樣：第 13 欄）"""
+    out = {}
+    j = jget("twse", f"https://www.twse.com.tw/rwd/zh/marginTrading/TWT93U?date={d:%Y%m%d}&response=json")
+    if ok(j) and j.get("data"):
+        for r in j["data"]:
+            v = num(r[12]) if len(r) > 12 else None
+            if v is not None:
+                out[r[0].strip()] = round(v / 1000)
+    j = jget("tpex", f"https://www.tpex.org.tw/www/zh-tw/margin/sbl?date={d:%Y/%m/%d}&response=json")
+    f, rows = table(j, "借券") if ok(j) else (None, None)
+    if rows:
+        for r in rows:
+            v = num(r[12]) if len(r) > 12 else None
+            if v is not None:
+                out[r[0].strip()] = round(v / 1000)
+    return out or None
+
+
+def tdcc_big():
+    """集保股權分散表（每週）：大戶（持股分級 15＝1,000,001 股以上）持股比例。快取近 4 週，回傳 [(日期, {code: %})]"""
+    path = CACHE / "tdcc.json"
+    cache = load_json(path) or {}
+    r = fetch("tpex", "https://opendata.tdcc.com.tw/getOD.ashx?id=1-5")
+    if r is not None:
+        week, cur = None, {}
+        for line in r.content.decode("utf-8-sig", errors="replace").splitlines()[1:]:
+            p = line.split(",")
+            if len(p) < 6 or p[2].strip() != "15":
+                continue
+            code = p[1].strip()
+            if CODES and code not in CODES:
+                continue
+            week = p[0].strip()
+            v = num(p[5])
+            if v is not None:
+                cur[code] = v
+        if week and cur:
+            cache[f"{week[:4]}-{week[4:6]}-{week[6:]}"] = cur
+    cache = {k: cache[k] for k in sorted(cache)[-4:]}
+    CACHE.mkdir(exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(cache, f, separators=(",", ":"))
+    log(f"集保大戶：快取 {len(cache)} 週（最新 {max(cache) if cache else '—'}）")
+    return sorted(cache.items())
 
 
 def fill(name, getter, keep, max_back):
@@ -312,6 +361,15 @@ def r2(x):
     return None if x is None else round(x, 2)
 
 
+def big_sbl(code, big, sbl):
+    bp = [w[1].get(code) for w in big]
+    bp = [x for x in bp if x is not None]
+    sb = [d[1].get(code) for d in sbl]
+    sb = [x for x in sb if x is not None]
+    return [bp[-1] if bp else None, r2(bp[-1] - bp[-2]) if len(bp) >= 2 else None,
+            sb[-1] if sb else None, (sb[-1] - sb[-6]) if len(sb) >= 6 else None]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-eps", action="store_true", help="不抓每季 EPS")
@@ -327,6 +385,12 @@ def main():
     price = fill("price", day_price, KEEP_PRICE, 120)
     inst = fill("inst", day_inst, KEEP_FLOW, 25)
     margin = fill("margin", day_margin, KEEP_FLOW, 25)
+    sbl = fill("sbl", day_sbl, KEEP_FLOW, 25)
+    try:
+        big = tdcc_big()
+    except Exception as e:
+        warn(f"集保股權分散表失敗：{e}")
+        big = []
     sq = {}
     try:
         sq = single_quarter((load_json(DATA / "all" / "eps_q.json") or {}).get("ytd", {}) if args.no_eps else update_eps())
@@ -386,10 +450,11 @@ def main():
             sum(x[0] for x in f5) if f5 else None, sum(x[1] for x in f5) if f5 else None, sum(x[2] for x in f5) if f5 else None,
             (mg[-1] - mg[-2]) if len(mg) >= 2 else None, (mg[-1] - mg[-6]) if len(mg) >= 6 else None,
             eq, yoy, up if ks else None,
-        ])
+        ] + big_sbl(code, big, sbl))
     out = DATA / "screener-tw.json"
     meta = {"updated": today_str(), "price_date": price[-1][0], "inst_date": inst[-1][0] if inst else None,
-            "margin_date": margin[-1][0] if margin else None, "eps_quarter": max((k for q in sq.values() for k in q), default=None)}
+            "margin_date": margin[-1][0] if margin else None, "sbl_date": sbl[-1][0] if sbl else None,
+            "tdcc_week": big[-1][0] if big else None, "eps_quarter": max((k for q in sq.values() for k in q), default=None)}
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write("{" + ",".join(json.dumps(k) + ":" + json.dumps(v) for k, v in meta.items()) + ',"fields":' + json.dumps(FIELDS) + ',"rows":[\n')
         f.write(",\n".join(json.dumps(r, separators=(",", ":")) for r in rows))

@@ -45,6 +45,12 @@
     </div>
   </section>
 
+  <section class="panel" id="p-chips" hidden>
+    <h3>籌碼 <span class="updated" id="chips-asof"></span></h3>
+    <div class="chips-grid" id="chips"></div>
+    <p class="note">外資不含外資自營商；張數＝千股。大戶＝集保持股 1,000 張以上（每週）。資料：證交所、櫃買中心、集保結算所，每個交易日收盤後更新。</p>
+  </section>
+
   <section class="panel" id="p-kline">
     <h3 id="k-title">K 線（日）</h3>
     <div class="tf-tabs" id="tf-tabs" role="tablist" aria-label="K 線週期" hidden></div>
@@ -190,6 +196,7 @@
   if (item.code) companyProfile(item).catch(() => TV.profile(document.getElementById("w-profile"), item));
   else TV.profile(document.getElementById("w-profile"), item);
   if (item.code) Refs.render(document.getElementById("refs"), item.code).then((ok) => { document.getElementById("p-refs").hidden = !ok; });
+  if (item.code) renderChips(item.code);
 
   // 追蹤清單的股票讀排程抓好的檔案；其他股票（或檔案還沒產生）即時查詢
   let d = null;
@@ -425,6 +432,28 @@
     document.getElementById("copy-entry").addEventListener("click", (e) => {
       navigator.clipboard.writeText(line).then(() => { e.target.textContent = "已複製"; }, () => {});
     });
+  }
+
+  // 籌碼（data/screener-tw.json，全市場每天一份）：外資連買、法人 5 日、融資、大戶、借券、單季 EPS
+  async function renderChips(code) {
+    let sc;
+    try { sc = await App.loadJSON("data/screener-tw.json"); } catch (e) { return; }
+    const r = sc.rows.find((x) => x[0] === code);
+    if (!r) return;
+    const v = Object.fromEntries(sc.fields.map((f, i) => [f, r[i]]));
+    const isNum = App.isNum;
+    const lots = (x) => (isNum(x) ? (x > 0 ? "+" : x < 0 ? "−" : "") + App.fmtNum(Math.abs(x), 0) + " 張" : "—");
+    const cell = (k, val, cls) => '<div class="tile"><div class="t-name">' + k + '</div><div class="t-val ' + (cls || "") + '" style="font-size:18px">' + val + "</div></div>";
+    document.getElementById("chips").innerHTML = '<div class="tiles">' +
+      cell("外資連" + (v.fi_days >= 0 ? "買" : "賣"), isNum(v.fi_days) ? Math.abs(v.fi_days) + " 日" : "—", App.upDown(v.fi_days)) +
+      cell("外資 5 日", lots(v.fi_5), App.upDown(v.fi_5)) + cell("投信 5 日", lots(v.it_5), App.upDown(v.it_5)) + cell("自營商 5 日", lots(v.dl_5), App.upDown(v.dl_5)) +
+      cell("融資 5 日增減", lots(v.mg_chg5)) +
+      cell("大戶持股", isNum(v.big_pct) ? App.fmtNum(v.big_pct, 2) + "%" + (isNum(v.big_chg) ? '<span class="updated">（週 ' + (v.big_chg > 0 ? "+" : "") + App.fmtNum(v.big_chg, 2) + "）</span>" : "") : "—") +
+      cell("借券賣出餘額", isNum(v.sbl) ? App.fmtNum(v.sbl, 0) + " 張" : "—") +
+      cell("單季 EPS（" + (sc.eps_quarter || "") + "）", isNum(v.eps_q) ? App.fmtNum(v.eps_q, 2) + (isNum(v.eps_q_yoy) ? ' <span class="' + App.upDown(v.eps_q_yoy) + '" style="font-size:13px">' + App.fmtPct(v.eps_q_yoy, true) + "</span>" : "") : "—") +
+      "</div>";
+    document.getElementById("chips-asof").textContent = "法人、融資 " + (sc.inst_date || "—") + "・集保 " + (sc.tdcc_week || "—");
+    document.getElementById("p-chips").hidden = false;
   }
 
   function renderQuote(d) {
