@@ -32,6 +32,8 @@
       (d ? row("MA" + ok[0].n + " 扣抵門檻", App.fmtPrice(d.value) + "（" + App.fmtPct(d.gapPct, true) + "）") : "");
   }
 
+  window.StockFaces = { technical };  // C 版個股抽屜也用
+
   Widgets.register("stockFaces", (el, o) => {
     el.classList.add("w-faces");
     let cur = { market: o.market === "us" ? "us" : "tw", symbol: String(o.symbol || "").toUpperCase() }, seq = 0;

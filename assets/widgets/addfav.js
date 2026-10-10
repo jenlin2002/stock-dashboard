@@ -62,10 +62,52 @@
     if (first) first.focus();
   }
 
+  // 一次加很多檔（C 版「全部加入自選」）：stocks＝[{ m, code, name, market?, exchange? }]，最多 100 檔
+  async function openMany(anchor, stocks) {
+    close();
+    stocks = stocks.slice(0, 100);
+    pop = document.createElement("div");
+    pop.className = "af-pop";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "全部加入自選");
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    pop.style.top = r.bottom + 4 + window.scrollY + "px";
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - 248, r.left)) + window.scrollX + "px";
+    setTimeout(() => { document.addEventListener("mousedown", outside, true); document.addEventListener("keydown", onKey, true); });
+    let groups;
+    try { groups = await Data.groups(); } catch (e) { pop.innerHTML = '<p class="note">— 讀不到自選股分頁：' + App.esc(e.message) + "</p>"; return; }
+    pop.innerHTML = '<div class="af-head">把 ' + stocks.length + " 檔加到…</div>" +
+      groups.map((g, i) => '<button type="button" class="af-item" data-g="' + i + '"><span>' + App.esc(g.name) + '</span><span class="af-state">' + g.items.length + " 檔</span></button>").join("") +
+      '<p class="note af-foot">已在分頁裡的不會重複加入。</p>';
+    pop.addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-g]");
+      if (!b || b.disabled) return;
+      pop.querySelectorAll("button").forEach((x) => { x.disabled = true; });
+      const st = b.querySelector(".af-state");
+      st.textContent = "加入中…";
+      try {
+        const w = await Data.watchlist();
+        for (const m of ["tw", "us"]) {
+          const fresh = stocks.filter((s) => s.m === m && !(App.findStock(w, s.code) && App.marketOf(App.findStock(w, s.code)) === m))
+            .map((s) => (m === "tw" ? { code: s.code, name: s.name, market: s.market || "TWSE" } : { ticker: s.code, name: s.name, exchange: s.exchange || "NASDAQ" }));
+          if (fresh.length) await App.editWatchlist("add", m, fresh);
+        }
+        Data.forget("watchlist");
+        const g = groups[+b.dataset.g], have = new Set(g.items);
+        let n = 0;
+        stocks.forEach((s) => { const k = keyOf(s); if (!have.has(k)) { have.add(k); g.items.push(k); n++; } });
+        await App.saveGroups(groups);
+        st.textContent = "已加入 " + n + " 檔";
+        window.dispatchEvent(new CustomEvent("sd:groups", { detail: { groups } }));
+      } catch (err) { st.textContent = "⚠ " + err.message; pop.querySelectorAll("button").forEach((x) => { x.disabled = false; }); }
+    });
+  }
+
   // 某檔已在哪些分頁（給列表畫 ☆／★）
   async function inGroups(m, code) {
     try { const k = m + ":" + String(code).toUpperCase(); return (await Data.groups()).filter((g) => g.items.includes(k)).map((g) => g.name); } catch (e) { return []; }
   }
 
-  window.AddFav = { open, close, inGroups };
+  window.AddFav = { open, openMany, close, inGroups };
 })();

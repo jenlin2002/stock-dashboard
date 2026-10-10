@@ -5,27 +5,140 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>C 選股漏斗｜台美股看盤</title>
-<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<!-- C 版預設淺色；使用者手動切過（localStorage theme）就照使用者的 -->
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("theme") || "light"; } catch (e) { document.documentElement.dataset.theme = "light"; }</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
-<body>
+<body class="no-side lp lp-c">
 <header class="topbar">
   <h1><a href="index.html?home=1">台美股看盤</a></h1>
   <nav><a href="watchlist.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 
-<main class="wide">
-  <section class="panel">
-    <h3>C 選股漏斗（建置中）</h3>
-    <p class="note">這個版面依 LAYOUT-SPEC.md 第 9 節的順序製作中。現有功能都在左側選單：大盤、全台股總表、個股分析、我的追蹤、比較表。</p>
-  </section>
+<main class="lp-c-grid">
+  <!-- 左欄：導覽＋自選清單 -->
+  <aside class="c-nav" aria-label="C 版導覽">
+    <nav class="c-links">
+      <a href="#" data-go="top">總覽</a><a href="market.html">大盤</a><a href="#" data-go="heat">類股熱力圖</a><a href="#" data-go="strat">選股器</a>
+      <a id="c-stock" href="stock.html">個股分析</a><a href="compare.html">比較表</a><a href="#" data-go="cal">行事曆</a>
+    </nav>
+    <div class="c-lists-head">自選清單</div>
+    <div class="c-lists" id="c-lists"></div>
+    <button type="button" class="c-add" id="c-add">＋ 新增清單</button>
+    <a class="c-manage" href="watchlist.html#hold">匯入／匯出、改名稱 →</a>
+  </aside>
+
+  <!-- 中欄：雙市場列、策略卡、篩選漏斗、結果列 -->
+  <div class="c-mid">
+    <section class="panel" data-widget="dualMarket"></section>
+    <section class="panel" id="c-heat" hidden><div data-widget="heatmap" data-view="sector" data-height="360" data-lazy="true"></div></section>
+    <section class="panel" id="c-cal" hidden><div data-widget="calendar" data-lazy="true"></div></section>
+    <section class="panel" id="c-funnel" data-widget="funnel"></section>
+  </div>
+
+  <!-- 右欄：個股抽屜 -->
+  <aside class="c-drawer panel" id="c-drawer" data-widget="stockDrawer" aria-label="個股抽屜"></aside>
 </main>
 
-<footer>資料僅供參考，不構成投資建議。</footer>
+<footer>資料僅供參考，不構成投資建議。資料來源：FinMind、證交所、櫃買中心、公開資訊觀測站、Yahoo Finance、Nasdaq。四面評分公式：assets/scoring.js（基本面＝ROE、EPS 成長、月營收年增的全市場百分位平均；評價＝本益比、PEG、殖利率的百分位平均，越便宜越高）。</footer>
 
 <script src="assets/app.js"></script>
 <script src="assets/layout.js"></script>
 <script src="assets/layout-switch.js"></script>
 <script src="assets/search.js"></script>
+<script src="assets/indicators.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/refs.js"></script>
+<script src="assets/holdings.js"></script>
+<script src="assets/heatmap.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/mount.js"></script>
+<script src="assets/scoring.js"></script>
+<script src="assets/widgets/addfav.js"></script>
+<script src="assets/widgets/dualmarket.js"></script>
+<script src="assets/widgets/funnel.js"></script>
+<script src="assets/widgets/stockfaces.js"></script>
+<script src="assets/widgets/pegcard.js"></script>
+<script src="assets/widgets/stockdrawer.js"></script>
+<script src="assets/widgets/heatmap.js"></script>
+<script src="assets/widgets/calendar.js"></script>
+<script>
+(async function () {
+  // 狀態：抽屜裡的股票（網址 ?symbol=，沒有就用上次看的）、市場
+  const q = new URLSearchParams(location.search);
+  let symbol = (q.get("symbol") || (() => { try { return localStorage.getItem("last-symbol"); } catch (e) { return null; } })() || "2330").toUpperCase();
+  let market = q.get("market");
+  if (!["tw", "us", "both"].includes(market)) market = /^\d/.test(symbol) ? "tw" : "us";
+  LayoutSwitch.setState({ market, symbol });
+  document.getElementById("c-stock").href = "stock.html?symbol=" + encodeURIComponent(symbol);
+  const lazy = [...document.querySelectorAll('[data-lazy="true"]')];
+  // 類股熱力圖、行事曆一開始藏著：先不掛載，第一次打開再掛（藏起來時量不到大小）
+  lazy.forEach((el) => { el.dataset.w = el.dataset.widget; el.removeAttribute("data-widget"); });
+  Widgets.mount(document, { market: market === "both" ? "tw" : market, symbol });
+  const funnel = document.getElementById("c-funnel"), drawer = document.getElementById("c-drawer");
+
+  // 點結果列、自選清單：換抽屜裡的股票
+  document.addEventListener("sd:pick", (e) => {
+    e.preventDefault();
+    symbol = String(e.detail.symbol).toUpperCase(); market = e.detail.market;
+    try { localStorage.setItem("last-symbol", symbol); } catch (err) {}
+    LayoutSwitch.setState({ market, symbol });
+    const u = new URL(location.href);
+    u.searchParams.set("symbol", symbol); u.searchParams.set("market", market);
+    history.replaceState(null, "", u);
+    document.getElementById("c-stock").href = "stock.html?symbol=" + encodeURIComponent(symbol);
+    if (drawer._widget) drawer._widget.update({ market, symbol });
+    if (window.innerWidth <= 1100) drawer.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  // 左欄導覽
+  const showPanel = (id) => {
+    const p = document.getElementById(id);
+    p.hidden = !p.hidden;
+    const w = p.querySelector("[data-w]");
+    if (!p.hidden && w && !w._widget) Widgets.render(w, w.dataset.w, Object.assign({}, w.dataset, { market: "tw" }));
+    if (!p.hidden) p.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  document.querySelector(".c-links").addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-go]");
+    if (!a) return;
+    e.preventDefault();
+    if (a.dataset.go === "heat") showPanel("c-heat");
+    else if (a.dataset.go === "cal") showPanel("c-cal");
+    else { if (funnel._widget) funnel._widget.showStrategy(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  });
+
+  // 自選清單：庫存股（這台裝置）＋自選股分頁（config/groups.json）；點了在中欄列出
+  const hold = Holdings.load();
+  const holdKeys = () => Object.keys(hold.tw).sort().map((c) => "tw:" + c).concat(Object.keys(hold.us).sort().map((c) => "us:" + c));
+  const listsEl = document.getElementById("c-lists");
+  let groups = [];
+  async function renderLists() {
+    try { groups = await Data.groups(); } catch (e) { groups = []; }
+    listsEl.innerHTML = '<button type="button" data-l="hold">庫存股<span>' + holdKeys().length + "</span></button>" +
+      groups.map((g, i) => '<button type="button" data-l="' + i + '">' + App.esc(g.name) + "<span>" + g.items.length + "</span></button>").join("");
+  }
+  listsEl.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-l]");
+    if (!b || !funnel._widget) return;
+    listsEl.querySelectorAll("button").forEach((x) => x.setAttribute("aria-current", String(x === b)));
+    if (b.dataset.l === "hold") funnel._widget.showList("庫存股", holdKeys());
+    else { const g = groups[+b.dataset.l]; funnel._widget.showList(g.name, g.items.slice()); }
+    funnel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.getElementById("c-add").addEventListener("click", async (e) => {
+    const name = (prompt("新清單的名稱（最多 16 字）", "自選" + (groups.length + 1)) || "").replace(/[\u0000-\u001f"\\<>]/g, "").trim().slice(0, 16);
+    if (!name) return;
+    if (groups.length >= 30) { alert("最多 30 個清單。"); return; }
+    groups.push({ name, items: [] });
+    e.target.disabled = true;
+    try { await App.saveGroups(groups); } catch (err) { groups.pop(); alert("新增失敗：" + err.message); }
+    e.target.disabled = false;
+    renderLists();
+  });
+  window.addEventListener("sd:groups", renderLists);
+  renderLists();
+})();
+</script>
 </body>
 </html>
