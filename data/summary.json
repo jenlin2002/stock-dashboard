@@ -1,9 +1,11 @@
 {
-  "updated": "2026-10-09",
+  "updated": "2026-10-10",
   "stocks": [
-    {"symbol":"2330","name":"台積電","market":"TW","exchange":"TWSE","updated":"2026-10-09","price_date":"2026-10-08","price":2550.0,"change_pct":-1.35,"pe":29.56,"pb":10.28,"dividend_yield":0.86,"revenue_month":"2026-09","revenue_yoy":54.65,"quarter":"2026Q2","eps_ttm":86.28,"gross_margin":67.72,"operating_margin":60.34},
-    {"symbol":"6488","name":"環球晶","market":"TW","exchange":"TPEX","updated":"2026-10-09","price_date":"2026-10-08","price":1130.0,"change_pct":-7.0,"pe":54.85,"pb":5.59,"dividend_yield":0.68,"revenue_month":"2026-09","revenue_yoy":-13.13,"quarter":"2026Q2","eps_ttm":20.6,"gross_margin":20.64,"operating_margin":9.35},
-    {"symbol":"AAPL","name":"Apple","market":"US","exchange":"NASDAQ","updated":"2026-10-09","price_date":"2026-10-08","price":340.42,"change_pct":1.11,"pe":39.04,"pb":46.25,"dividend_yield":0.31,"revenue_month":null,"revenue_yoy":null,"quarter":"2026Q2","eps_ttm":8.71,"gross_margin":50.06,"operating_margin":32.62},
-    {"symbol":"NVDA","name":"NVIDIA","market":"US","exchange":"NASDAQ","updated":"2026-10-09","price_date":"2026-10-08","price":230.48,"change_pct":-2.94,"pe":29.14,"pb":24.3,"dividend_yield":0.12,"revenue_month":null,"revenue_yoy":null,"quarter":"2026Q2","eps_ttm":7.91,"gross_margin":74.98,"operating_margin":66.24}
+    {"symbol":"2330","name":"台積電","market":"TW","exchange":"TWSE","updated":"2026-10-10","price_date":"2026-10-08","price":2550.0,"change_pct":-1.35,"pe":29.56,"pb":10.28,"dividend_yield":0.86,"revenue_month":"2026-09","revenue_yoy":54.65,"quarter":"2026Q2","eps_ttm":86.28,"gross_margin":67.72,"operating_margin":60.34},
+    {"symbol":"3017","name":"奇鋐","market":"TW","exchange":"TWSE","updated":"2026-10-10","price_date":"2026-10-08","price":3440.0,"change_pct":-2.96,"pe":45.85,"pb":24.47,"dividend_yield":0.61,"revenue_month":"2026-09","revenue_yoy":44.92,"quarter":"2026Q2","eps_ttm":75.13,"gross_margin":32.57,"operating_margin":27.44},
+    {"symbol":"6488","name":"環球晶","market":"TW","exchange":"TPEX","updated":"2026-10-10","price_date":"2026-10-08","price":1130.0,"change_pct":-7.0,"pe":54.85,"pb":5.59,"dividend_yield":0.68,"revenue_month":"2026-09","revenue_yoy":-13.13,"quarter":"2026Q2","eps_ttm":20.6,"gross_margin":20.64,"operating_margin":9.35},
+    {"symbol":"AAPL","name":"Apple","market":"US","exchange":"NASDAQ","updated":"2026-10-10","price_date":"2026-10-08","price":340.42,"change_pct":1.11,"pe":38.61,"pb":45.74,"dividend_yield":0.31,"revenue_month":null,"revenue_yoy":null,"quarter":"2026Q2","eps_ttm":8.71,"gross_margin":50.06,"operating_margin":32.62},
+    {"symbol":"NVDA","name":"NVIDIA","market":"US","exchange":"NASDAQ","updated":"2026-10-10","price_date":"2026-10-08","price":230.48,"change_pct":-2.94,"pe":28.99,"pb":24.18,"dividend_yield":0.12,"revenue_month":null,"revenue_yoy":null,"quarter":"2026Q2","eps_ttm":7.91,"gross_margin":74.98,"operating_margin":66.24},
+    {"symbol":"TSLA","name":"Tesla, Inc.","market":"US","exchange":"NASDAQ","updated":"2026-10-10","price_date":"2026-10-08","price":375.0,"change_pct":-0.74,"pe":354.35,"pb":17.4,"dividend_yield":0.0,"revenue_month":null,"revenue_yoy":null,"quarter":"2026Q2","eps_ttm":1.08,"gross_margin":16.83,"operating_margin":1.41}
   ]
 }

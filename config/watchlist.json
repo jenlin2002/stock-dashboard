@@ -1,10 +1,12 @@
 {
   "tw": [
     { "code": "2330", "name": "台積電", "market": "TWSE" },
+    { "code": "3017", "name": "奇鋐", "market": "TWSE" },
     { "code": "6488", "name": "環球晶", "market": "TPEX" }
   ],
   "us": [
     { "ticker": "AAPL", "name": "Apple", "exchange": "NASDAQ" },
-    { "ticker": "NVDA", "name": "NVIDIA", "exchange": "NASDAQ" }
+    { "ticker": "NVDA", "name": "NVIDIA", "exchange": "NASDAQ" },
+    { "ticker": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ" }
   ]
 }
