@@ -51,11 +51,13 @@
     <div class="kctl" id="kctl" hidden></div>
     <div class="klegend" id="klegend"></div>
     <div class="body chart-body" id="w-chart"></div>
+    <div class="body vol-body" id="w-vol" hidden></div>
     <div class="body sub-body" id="w-sub" hidden></div>
     <div class="table-wrap" id="t-deduct"></div>
     <p class="note" id="kline-note" hidden>
       日線：每日收盤資料（台股 FinMind、美股 Yahoo Finance）；週線、月線由日線合併；分鐘線：Yahoo Finance 延遲報價（1 分鐘最近 5 天、5～30 分鐘最近 60 天、60 分鐘最近 1 年）。紅漲綠跌，可拖曳、滾輪縮放。<br>
       均線、扣抵、DMI 等指標都以「根」計算：在 5 分線上 MA8 就是 8 根 5 分 K 的平均。<br>
+      價、量、副圖各自一格，拖拉格子下方的橫條可以調整高度（會記住）。「⚙ 均線設定」可以改均線、均量線的天數、顏色、粗細，也可以新增或刪除；大盤頁共用同一組設定。<br>
       <b>扣抵（動態）</b>：游標指到哪一天，就以那天為基準標出扣抵 K 棒（箭頭）與扣抵價（虛線），下表也跟著換；沒有指著時以最新一天為準。
       N 根均線下一根會扣掉 N 根前那根 K 棒的收盤價（扣抵值）：下一根收盤高於扣抵值，均線上揚；低於則下彎。均量同理（看成交量）。
       「接下來 5 根」：扣抵值多數低於現值為<b>扣低</b>（容易續揚），多數高於現值為<b>扣高</b>（容易轉弱）。
@@ -110,6 +112,7 @@
 <script src="assets/widgets.js"></script>
 <script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
+<script src="assets/maconfig.js"></script>
 <script src="assets/refs.js"></script>
 <script>
 (async function () {
@@ -179,11 +182,19 @@
   document.getElementById("kline-note").hidden = false;
 
   // ---------- K 線設定（記在瀏覽器，讀不到就用預設） ----------
-  const MAS = Charts.MAS, SUBS = ["dmi", "kd", "rsi", "macd", "none"];
-  let opts = { ma: MAS.slice(), deduct: true, sub: "dmi" };
+  // 均線（天數、顏色、粗細、開關）在「⚙ 均線設定」改，存在 Charts.maSettings()
+  const SUBS = ["dmi", "kd", "rsi", "macd", "none"];
+  let opts = { deduct: true, sub: "dmi" };
   try { opts = Object.assign(opts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
-  opts.ma = MAS.filter((x) => (opts.ma || []).includes(x));
+  delete opts.ma;
   if (!SUBS.includes(opts.sub)) opts.sub = "dmi";
+  const wChart = document.getElementById("w-chart"), wVol = document.getElementById("w-vol"), wSub = document.getElementById("w-sub");
+  wVol.hidden = false;
+  Charts.initPanes("pane-h-stock", [
+    { el: wChart, key: "price", def: 400, min: 150 },
+    { el: wVol, key: "vol", def: 120, min: 50 },
+    { el: wSub, key: "sub", def: 150, min: 60 },
+  ]);
   function saveOpts() { try { localStorage.setItem("kline-opts-v2", JSON.stringify(opts)); } catch (e) {} }
 
   // ---------- K 線週期：1、5、15、30、60 分（盤中，Yahoo）／日／週／月（由日線合併） ----------
@@ -210,8 +221,10 @@
   });
 
   const kctl = document.getElementById("kctl");
+  const maBoxes = () => Charts.maSettings().ma.map((m, i) => '<label><input type="checkbox" data-ma="' + i + '"' + (m.on ? " checked" : "") + '><i style="background:' + m.color + '"></i>MA' + m.n + "</label>").join("");
   kctl.innerHTML =
-    MAS.map((x) => '<label><input type="checkbox" data-ma="' + x + '"' + (opts.ma.includes(x) ? " checked" : "") + '><i style="background:' + Charts.MA_COLORS[x] + '"></i>MA' + x + "</label>").join("") +
+    '<span id="ma-boxes">' + maBoxes() + "</span>" +
+    '<button type="button" class="btn ma-btn" id="ma-cfg" title="均線、均量線的天數、顏色、粗細">⚙ 均線設定</button>' +
     '<label><input type="checkbox" data-deduct' + (opts.deduct ? " checked" : "") + ">扣抵</label>" +
     '<span class="seg" role="group" aria-label="副圖">' +
       ["dmi:DMI", "kd:KD", "rsi:RSI", "macd:MACD", "none:不顯示"].map((s) => { const [k, t] = s.split(":"); return '<button type="button" data-sub="' + k + '" aria-pressed="' + (opts.sub === k) + '">' + t + "</button>"; }).join("") +
@@ -221,13 +234,21 @@
   kctl.hidden = false;
   kctl.addEventListener("change", (e) => {
     const t = e.target;
-    if (t.dataset.ma) opts.ma = MAS.filter((x) => kctl.querySelector('[data-ma="' + x + '"]').checked);
+    if (t.dataset.ma != null) {
+      const s = Charts.maSettings();
+      if (s.ma[+t.dataset.ma]) s.ma[+t.dataset.ma].on = t.checked;
+      Charts.saveMaSettings(s);
+    }
     if ("deduct" in t.dataset) opts.deduct = t.checked;
     if ("track" in t.dataset) opts.track = t.checked;
     saveOpts();
     drawCharts();
   });
   kctl.addEventListener("click", (e) => {
+    if (e.target.closest("#ma-cfg")) {
+      MaConfig.open(() => { document.getElementById("ma-boxes").innerHTML = maBoxes(); drawKline(); });
+      return;
+    }
     const b = e.target.closest("button[data-sub]");
     if (!b) return;
     opts.sub = b.dataset.sub;
@@ -253,17 +274,18 @@
     Charts.destroyKlines();
     kp = p;
     deductShown = -1;
-    const k = Charts.kline(document.getElementById("w-chart"), document.getElementById("w-sub"), { market: d.market, price: p }, opts);
+    const k = Charts.kline({ price: wChart, vol: wVol, sub: wSub }, { market: d.market, price: p }, opts);
+    kMa = k.ma; kVolMa = k.volMa;
     const vfmt = (x, dg) => (App.isNum(x) ? App.fmtNum(x, dg == null ? 2 : dg) : "—");
     k.onCrosshair((i) => {
       const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
       let html = "<span>" + Charts.timeLabel(p.dates[i]) + "</span>" +
         "<span>開 " + App.fmtPrice(p.open[i]) + " 高 " + App.fmtPrice(p.high[i]) + " 低 " + App.fmtPrice(p.low[i]) +
         ' 收 <b class="' + App.upDown(chg) + '">' + App.fmtPrice(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
-      html += opts.ma.map((x) => '<span style="color:' + Charts.MA_COLORS[x] + '">MA' + x + " " + vfmt(k.values["MA" + x][i]) + "</span>").join("");
+      html += k.ma.map((m) => '<span style="color:' + m.color + '">MA' + m.n + " " + vfmt(k.values["MA" + m.n][i]) + "</span>").join("");
       const unit = d.market === "TW" ? " 張" : "";
       html += "<span>量 " + vfmt(k.values.vol[i], 0) + unit + "</span>";
-      html += Charts.VOL_MA.map((x) => '<span style="color:' + Charts.VOL_COLORS[x] + '">均量' + x + " " + vfmt(k.values["VMA" + x][i], 0) + "</span>").join("");
+      html += k.volMa.map((m) => '<span style="color:' + m.color + '">均量' + m.n + " " + vfmt(k.values["VMA" + m.n][i], 0) + "</span>").join("");
       const C = Charts.SUB_COLORS;
       if (opts.sub === "dmi") html += '<span class="up">+DI' + Charts.DMI_N + " " + vfmt(k.values.PDI[i]) + '</span><span class="down">−DI ' + vfmt(k.values.MDI[i]) + '</span><span style="color:#1c7ed6">ADX ' + vfmt(k.values.ADX[i]) + "</span>";
       if (opts.sub === "kd") html += '<span style="color:' + C[0] + '">K ' + vfmt(k.values.K[i]) + '</span><span style="color:' + C[1] + '">D ' + vfmt(k.values.D[i]) + "</span>";
@@ -275,7 +297,7 @@
   }
 
   // 扣抵表：勾選的均線＋均量，以第 t 根 K 棒為「今天」
-  let deductShown = -1;
+  let deductShown = -1, kMa = [], kVolMa = [];
   function renderDeductTable(t, volArr) {
     const el = document.getElementById("t-deduct");
     if (!opts.deduct) { el.innerHTML = ""; deductShown = -1; return; }
@@ -283,16 +305,17 @@
     deductShown = t;
     const close = kp.close, last = close[t], lastVol = volArr[t];
     const trendCell = (r, fmt) => '<td><b class="' + (r.trend === "扣低" ? "up" : r.trend === "扣高" ? "down" : "") + '">' + r.trend + '</b> <span class="updated">' + r.next5.map(fmt).join("、") + "</span></td>";
-    const priceRows = opts.ma.map((x) => Ind.deduction(close, x, t)).filter(Boolean).map((r) =>
-      '<tr><td><i class="dot" style="background:' + Charts.MA_COLORS[r.n] + '"></i>MA' + r.n + "</td>" +
+    const colorOf = (list, n) => (list.find((m) => m.n === n) || {}).color;
+    const priceRows = kMa.map((m) => Ind.deduction(close, m.n, t)).filter(Boolean).map((r) =>
+      '<tr><td><i class="dot" style="background:' + colorOf(kMa, r.n) + '"></i>MA' + r.n + "</td>" +
       "<td>" + App.fmtPrice(r.ma) + (last > r.ma ? '<span class="up"> 價在線上</span>' : '<span class="down"> 價在線下</span>') + "</td>" +
       "<td>" + App.fmtPrice(r.value) + "</td>" +
       '<td class="' + App.upDown(r.dir) + '">' + (r.dir > 0 ? "上揚 ↗" : r.dir < 0 ? "下彎 ↘" : "持平") + "</td>" +
       "<td>收盤" + (r.dir >= 0 ? "跌破 " : "站上 ") + App.fmtPrice(r.value) + "（" + App.fmtPct(r.gapPct, true) + "）</td>" +
       trendCell(r, App.fmtPrice) + "</tr>");
     const vf = (x) => App.fmtNum(x, 0);
-    const volRows = Charts.VOL_MA.map((x) => Ind.deduction(volArr, x, t)).filter(Boolean).map((r) =>
-      '<tr><td><i class="dot" style="background:' + Charts.VOL_COLORS[r.n] + '"></i>均量' + r.n + "</td>" +
+    const volRows = kVolMa.map((m) => Ind.deduction(volArr, m.n, t)).filter(Boolean).map((r) =>
+      '<tr><td><i class="dot" style="background:' + colorOf(kVolMa, r.n) + '"></i>均量' + r.n + "</td>" +
       "<td>" + vf(r.ma) + (lastVol > r.ma ? '<span class="up"> 量大於均量</span>' : '<span class="down"> 量小於均量</span>') + "</td>" +
       "<td>" + vf(r.value) + "</td>" +
       '<td class="' + App.upDown(r.dir) + '">' + (r.dir > 0 ? "均量增 ↗" : r.dir < 0 ? "均量減 ↘" : "持平") + "</td>" +

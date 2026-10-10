@@ -403,6 +403,15 @@ stock-dashboard/
 **K 線「查價」開關（2026-10-10，本人要求並更正）**：副圖按鈕旁的「查價」勾選框（個股頁、大盤頁共用 `kline-opts-v2.track`）。打勾：滑鼠指到的 K 棒旁跳出資訊小框（日期、開高低收、漲跌、量、各均線；靠邊自動換邊），上方數值、動態扣抵、扣抵表也跟著換成那一根；不打勾：只有十字線（不顯示小框，數值固定在最新一根）。`Charts.kline` 的 `opts.track`；量的單位由 `d.volUnit` 指定（台股張、指數億、台指期口）。
 - 副圖加 **RSI**（本人說的「SI 指標」確認是 RSI）：RSI 6、RSI 12（Wilder 平滑），70／50／30 參考線；個股頁、大盤頁都有。已用 Python 獨立計算核對台積電 RSI6 61.08、RSI12 62.20 一致。
 
+**價量分開＋可調高度、均線自訂（2026-10-10，本人要求）**：
+- K 線改成三個同步的圖：價（K 棒＋均線）、量（成交量＋均量線）、副圖。只有最下面一格顯示時間軸，捲動縮放與十字線三格同步。
+- 每格下方有拖拉條（`.pane-resizer`，滑鼠／觸控拖拉，或用方向鍵），高度存在 localStorage：個股頁 `pane-h-stock`，大盤頁 `pane-h-market-tw` 和 `pane-h-market-us`。程式在 `Charts.initPanes(storeKey, panes)`。
+- 「⚙ 均線設定」對話框（`assets/maconfig.js`）：均線、均量線各最多 8 條，每條可設天數（2～500）、顏色、粗細（1～4）、開關，也可新增、刪除、恢復預設（MA 8/21/55/89、均量 5/13/34）。
+  - 設定存在 localStorage 的 `ma-settings`（`Charts.maSettings()`／`saveMaSettings()`），個股頁和大盤頁共用。
+  - 圖例、資訊小框、動態扣抵、扣抵表都跟著設定變。
+  - 個股頁工具列的 MA 勾選框是由設定產生的。
+- `Charts.kline(hosts{price,vol,sub}, d, opts)` 回傳 `{ values, volArr, ma, volMa, onCrosshair }`。舊的 `MAS`、`MA_COLORS`、`VOL_MA`、`VOL_COLORS` 已移除。
+
 **⑥ 美股總表（本人追加，待規劃）**：選單加「美股總表」，類似全台股總表。需找美股全部股票的批次來源（候選：SEC frames API 一次拿某季全部公司的營收／EPS；股價與市值另找），規劃後再做。
 
 ---

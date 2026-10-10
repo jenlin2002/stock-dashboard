@@ -37,6 +37,7 @@
       <div class="tf-tabs"><span class="seg" id="tw-src"></span> <span class="seg" id="tw-tf"></span> <span class="seg" id="tw-sub-btns"></span> <span id="tw-track"></span></div>
       <div class="klegend" id="tw-legend"></div>
       <div class="body chart-body" id="tw-chart"></div>
+      <div class="body vol-body" id="tw-vol"></div>
       <div class="body sub-body" id="tw-sub"></div>
       <p class="note" id="tw-note"></p>
     </section>
@@ -72,6 +73,7 @@
       <div class="tf-tabs"><span class="seg" id="us-src"></span> <span class="seg" id="us-tf"></span> <span class="seg" id="us-sub-btns"></span> <span id="us-track"></span></div>
       <div class="klegend" id="us-legend"></div>
       <div class="body chart-body" id="us-chart"></div>
+      <div class="body vol-body" id="us-vol"></div>
       <div class="body sub-body" id="us-sub"></div>
       <p class="note">Yahoo Finance 延遲報價；成交量為股數（費城半導體指數沒有成交量）。日線 5 年，週、月線由日線合併。</p>
     </section>
@@ -89,6 +91,7 @@
 <script src="assets/search.js"></script>
 <script src="assets/indicators.js"></script>
 <script src="assets/charts.js"></script>
+<script src="assets/maconfig.js"></script>
 <script src="assets/heatmap.js"></script>
 <script>
 (async function () {
@@ -97,9 +100,15 @@
   const signed = (x, d) => (isNum(x) ? (x > 0 ? "+" : "") + App.fmtNum(x, d == null ? 2 : d) : "—");
 
   // K 線指標設定沿用個股頁（MA、扣抵、副圖）
-  let kopts = { ma: Charts.MAS.slice(), deduct: true, sub: "dmi" };
+  // 均線（天數、顏色、粗細）和個股頁共用「⚙ 均線設定」
+  let kopts = { deduct: true, sub: "dmi" };
   try { kopts = Object.assign(kopts, JSON.parse(localStorage.getItem("kline-opts-v2") || "{}")); } catch (e) {}
-  kopts.ma = Charts.MAS.filter((x) => (kopts.ma || []).includes(x));
+  delete kopts.ma;
+  ["tw", "us"].forEach((mk) => Charts.initPanes("pane-h-market-" + mk, [
+    { el: document.getElementById(mk + "-chart"), key: "price", def: 380, min: 150 },
+    { el: document.getElementById(mk + "-vol"), key: "vol", def: 110, min: 50 },
+    { el: document.getElementById(mk + "-sub"), key: "sub", def: 140, min: 60 },
+  ]));
 
   let m = {};
   try { m = await App.loadJSON("data/market.json"); } catch (e) {}
@@ -229,7 +238,8 @@
     document.getElementById(mk + "-sub-btns").innerHTML = [["dmi", "DMI"], ["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["none", "不顯示"]]
       .map(([k, t]) => '<button type="button" data-sub="' + k + '" aria-pressed="' + (kopts.sub === k) + '">' + t + "</button>").join("");
     document.getElementById(mk + "-track").innerHTML = '<label class="track" title="打勾：游標移到哪根 K 棒，上方數值、扣抵就換成那一根；不打勾：游標只顯示十字線">' +
-      '<input type="checkbox"' + (kopts.track !== false ? " checked" : "") + ">查價</label>";
+      '<input type="checkbox"' + (kopts.track !== false ? " checked" : "") + ">查價</label>" +
+      ' <button type="button" class="btn ma-btn" data-ma-cfg title="均線、均量線的天數、顏色、粗細">⚙ 均線設定</button>';
   }
 
   async function drawK(mk) {
@@ -247,14 +257,18 @@
     }
     if (seq !== st.seq) return;
     Charts.destroyKlines();
-    const k = Charts.kline(document.getElementById(mk + "-chart"), document.getElementById(mk + "-sub"), { market: "IDX", price: p, volUnit: src.unit }, kopts);
+    const k = Charts.kline({ price: document.getElementById(mk + "-chart"), vol: document.getElementById(mk + "-vol"), sub: document.getElementById(mk + "-sub") },
+      { market: "IDX", price: p, volUnit: src.unit }, kopts);
     const intraday = typeof p.dates[0] === "number";
     k.onCrosshair((i) => {
       const chg = i > 0 ? (p.close[i] / p.close[i - 1] - 1) * 100 : null;
       let html = "<span>" + Charts.timeLabel(p.dates[i]) + "</span><span>開 " + fmt(p.open[i]) + " 高 " + fmt(p.high[i]) + " 低 " + fmt(p.low[i]) +
         ' 收 <b class="' + App.upDown(chg) + '">' + fmt(p.close[i]) + " " + App.fmtPct(chg, true) + "</b></span>";
-      html += kopts.ma.map((x) => '<span style="color:' + Charts.MA_COLORS[x] + '">MA' + x + " " + fmt(k.values["MA" + x][i]) + "</span>").join("");
-      if (p.volume[i]) html += "<span>" + (src.unit === "億" ? "成交 " : "量 ") + App.fmtNum(p.volume[i], 0) + " " + src.unit + "</span>";
+      html += k.ma.map((x) => '<span style="color:' + x.color + '">MA' + x.n + " " + fmt(k.values["MA" + x.n][i]) + "</span>").join("");
+      if (p.volume[i]) {
+        html += "<span>" + (src.unit === "億" ? "成交 " : "量 ") + App.fmtNum(p.volume[i], 0) + " " + src.unit + "</span>";
+        html += k.volMa.map((x) => '<span style="color:' + x.color + '">均量' + x.n + " " + (isNum(k.values["VMA" + x.n][i]) ? App.fmtNum(k.values["VMA" + x.n][i], 0) : "—") + "</span>").join("");
+      }
       if (src.key === "TX" && p.oi) html += "<span>未平倉 " + App.fmtNum(p.oi[i], 0) + " 口</span>";
       lg.innerHTML = html;
     });
@@ -276,6 +290,9 @@
       kopts.sub = b.dataset.sub;
       try { localStorage.setItem("kline-opts-v2", JSON.stringify(Object.assign(JSON.parse(localStorage.getItem("kline-opts-v2") || "{}"), { sub: kopts.sub }))); } catch (err) {}
       drawK(mk);
+    });
+    document.getElementById(mk + "-track").addEventListener("click", (e) => {
+      if (e.target.closest("[data-ma-cfg]")) MaConfig.open(() => drawK(mk));
     });
     document.getElementById(mk + "-track").addEventListener("change", (e) => {
       kopts.track = e.target.checked;

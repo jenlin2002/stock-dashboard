@@ -294,6 +294,28 @@ tr.busy { opacity: .4; pointer-events: none; }
   .t-val { font-size: 18px; }
 }
 .tf-tabs button:disabled { opacity: .4; cursor: not-allowed; }
+/* 價／量／副圖三格與拖拉條 */
+.kpane { position: relative; }
+.chart-body.kpane, .sub-body.kpane { height: auto; }
+.pane-resizer { height: 8px; cursor: row-resize; background: transparent; border-top: 1px solid var(--border); position: relative; touch-action: none; }
+.pane-resizer::after { content: ""; position: absolute; left: 50%; top: 2px; width: 36px; height: 3px; margin-left: -18px; border-radius: 2px; background: var(--border); }
+.pane-resizer:hover::after, .pane-resizer.dragging::after, .pane-resizer:focus-visible::after { background: var(--accent); }
+.kpane[hidden] + .pane-resizer { display: none; }
+
+/* 均線設定對話框 */
+.ma-dlg { width: min(560px, calc(100vw - 32px)); }
+.ma-dlg h4 { margin: 14px 0 6px; font-size: 14px; }
+.ma-tbl { font-size: 13px; margin-bottom: 6px; }
+.ma-tbl th, .ma-tbl td { padding: 4px 6px; text-align: left; }
+.ma-tbl input[type="checkbox"] { width: auto; }
+.ma-tbl input[type="number"] { width: 64px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; }
+.ma-tbl input[type="color"] { width: 40px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; }
+.ma-tbl select { padding: 3px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; }
+.ma-dlg .dlg-foot { align-items: center; gap: 6px; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ma-err { min-height: 1em; margin: 6px 0 0; font-size: 13px; }
+.ma-btn { margin-left: 4px; cursor: pointer; padding: 3px 10px; font-size: 13px; }
+
 /* K 線「查價」資訊小框 */
 .k-tip {
   position: absolute; z-index: 5; pointer-events: none; min-width: 120px;
