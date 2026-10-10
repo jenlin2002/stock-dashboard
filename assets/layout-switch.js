@@ -28,7 +28,7 @@
     if (!s.market) {
       const m = q.get("market") || q.get("m");
       if (m === "tw" || m === "us" || m === "both") s.market = m;
-      else if (page === "market" && /^#(tw|us)$/.test(location.hash)) s.market = location.hash.slice(1);
+      else if ((page === "market" || page === "watchlist") && /^#(tw|us)$/.test(location.hash)) s.market = location.hash.slice(1);
     }
     if (!s.symbol && q.get("symbol")) s.symbol = q.get("symbol").trim().toUpperCase();
     return s;
