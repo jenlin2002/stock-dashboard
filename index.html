@@ -17,12 +17,18 @@
 
 <main class="wide">
   <div class="toolbar">
-    <div class="seg mk-tabs" role="tablist" aria-label="市場">
-      <button type="button" role="tab" data-mk="tw">台股</button>
-      <button type="button" role="tab" data-mk="us">美股</button>
+    <!-- 自選股分頁：頁簽雙擊或按 ✎ 改名稱，＋ 新增、− 刪除目前分頁（存在 config/groups.json） -->
+    <div class="grp-bar">
+      <div class="seg grp-tabs" role="tablist" aria-label="自選股分頁" id="grp-tabs"></div>
+      <button type="button" class="btn grp-btn" id="grp-add" title="新增分頁" aria-label="新增分頁">＋</button>
+      <button type="button" class="btn grp-btn" id="grp-del" title="刪除目前分頁" aria-label="刪除目前分頁">−</button>
+      <button type="button" class="btn grp-btn" id="grp-ren" title="改目前分頁的名稱（也可以雙擊頁簽）" aria-label="改目前分頁的名稱">✎</button>
+      <span class="updated" id="grp-msg" role="status"></span>
     </div>
     <span id="tw-live"></span>
-    <button type="button" class="btn" id="hold-btn">📥 匯入庫存</button>
+    <button type="button" class="btn" id="io-import" title="匯入目前畫面的股票（庫存股：匯入庫存）">📥 匯入</button>
+    <button type="button" class="btn" id="io-export" title="把目前畫面的股票存成 CSV（Excel 可開）">📤 匯出</button>
+    <span class="view-title" id="view-title"></span>
     <div class="view-wrap">
     <span class="view-label" id="view-label">畫面顯示：</span>
     <div class="seg view-btns" role="group" aria-labelledby="view-label">
@@ -38,15 +44,12 @@
     </div>
     </div>
   </div>
-  <!-- 每個市場一個分頁：方塊模式看 .grid，清單模式看 .list-pane（欄位與全台股總表相同＋近一年走勢） -->
-  <section id="pane-tw" role="tabpanel">
+  <!-- 目前分頁：方塊模式看 .grid（台股美股混在一起），清單模式看 .list-pane（台股、美股各一張表，欄位與總表相同＋近一年走勢） -->
+  <section id="pane" role="tabpanel">
     <div class="hold-sum" id="tw-hsum" hidden></div>
-    <div class="grid" id="tw"></div>
-    <div class="list-pane" id="tw-list"></div>
-  </section>
-  <section id="pane-us" role="tabpanel" hidden>
     <div class="hold-sum" id="us-hsum" hidden></div>
-    <div class="grid" id="us"></div>
+    <div class="grid" id="grid"></div>
+    <div class="list-pane" id="tw-list"></div>
     <div class="list-pane" id="us-list"></div>
   </section>
 </main>
@@ -58,6 +61,30 @@
     <ul id="add-list" class="pick-list"></ul>
     <p id="add-msg" class="updated" role="status"></p>
     <div class="dlg-foot"><button class="btn" value="cancel">關閉</button></div>
+  </form>
+</dialog>
+
+<!-- 匯入股票清單（自選股分頁、台股、美股）：只要代號或名稱 -->
+<dialog id="list-dlg" class="hold-dlg" aria-labelledby="list-title">
+  <form method="dialog" class="dlg">
+    <h3 id="list-title">匯入股票</h3>
+    <div id="list-step1">
+      <textarea id="list-text" rows="7" spellcheck="false" aria-label="貼上股票清單"
+        placeholder="貼上股票代號或名稱，一行一檔，或從 Excel／XQ／YesWin 複製整個表格。&#10;2330&#10;聯發科&#10;AAPL&#10;也可以匯入這個網站「匯出」的 CSV。"></textarea>
+      <div class="hold-row">
+        <label class="btn">選擇檔案<input type="file" id="list-file" accept=".csv,.txt,.xls,.xlsx,.pdf" hidden></label>
+        <span class="updated">CSV、Excel、TXT</span>
+        <button type="button" class="btn primary" id="list-parse">解析</button>
+      </div>
+    </div>
+    <div id="list-step2" hidden><div id="list-preview"></div></div>
+    <p id="list-msg" class="updated" role="status"></p>
+    <div class="dlg-foot hold-foot">
+      <span></span>
+      <button type="button" class="btn" id="list-back" hidden>重新貼上</button>
+      <button class="btn" value="cancel">關閉</button>
+      <button type="button" class="btn primary" id="list-save" hidden>加入</button>
+    </div>
   </form>
 </dialog>
 
@@ -120,58 +147,214 @@
   const hold = Holdings.load();   // 持股（只存在這台裝置）
   const px = { tw: {}, us: {} };  // 持股損益用的最新股價
 
-  function addCards(list, el, m) {
-    for (const item of list) {
-      const sym = App.symbolOf(item);
+  // ---------- 畫面：左側選單「台股」「美股」＝追蹤清單全部；右邊頁簽「庫存股」＋自選股分頁 ----------
+  // view："tw" | "us" | "hold" | 數字（自選股分頁的位置）
+  // 追蹤清單（watchlist.json）決定每天抓哪些股票的資料；自選股分頁（groups.json）只是分組，分頁裡的股票一定也在追蹤清單
+  const itemOf = {};  // "tw:2330" → { m, item }
+  function indexItems() {
+    for (const k of Object.keys(itemOf)) delete itemOf[k];
+    w.tw.forEach((it) => { itemOf["tw:" + it.code] = { m: "tw", item: it }; });
+    w.us.forEach((it) => { itemOf["us:" + it.ticker.toUpperCase()] = { m: "us", item: it }; });
+  }
+  indexItems();
+  const keyOf = (m, sym) => m + ":" + String(sym).toUpperCase();
+  let groups = await App.loadGroups(w);
+  groups.forEach((g) => { g.items = g.items.filter((k) => itemOf[k]); });
+
+  let view = "hold";
+  function viewFromHash() {
+    const h = location.hash;
+    if (h === "#tw" || h === "#us" || h === "#hold") return h.slice(1);
+    const m = /^#g(\d+)$/.exec(h);
+    if (m && +m[1] >= 1 && +m[1] <= groups.length) return +m[1] - 1;
+    return null;
+  }
+  {
+    let v = viewFromHash();
+    if (v == null) { try { const s = localStorage.getItem("watch-view-key"); v = /^g\d+$/.test(s) ? +s.slice(1) : s; } catch (e) {} }
+    view = v === "tw" || v === "us" || v === "hold" || (Number.isInteger(v) && v >= 0 && v < groups.length) ? v : "hold";
+  }
+  const isGroup = () => typeof view === "number";
+  const holdKeys = () => Object.keys(hold.tw).sort().map((c) => "tw:" + c).concat(Object.keys(hold.us).sort().map((c) => "us:" + c.toUpperCase()));
+  function viewKeys() {
+    if (view === "tw") return w.tw.map((x) => "tw:" + x.code);
+    if (view === "us") return w.us.map((x) => "us:" + x.ticker.toUpperCase());
+    if (view === "hold") return holdKeys();
+    return groups[view].items;
+  }
+  const viewSet = () => new Set(viewKeys());
+  const viewName = () => (view === "tw" ? "全部台股" : view === "us" ? "全部美股" : view === "hold" ? "庫存股" : groups[view].name);
+  // 卡片用的股票：追蹤清單的；庫存股裡不在追蹤清單的用持股資料補
+  function entryOf(k) {
+    if (itemOf[k]) return itemOf[k];
+    const [m, sym] = k.split(":");
+    const e = hold[m][sym] || hold[m][sym.toUpperCase()];
+    if (!e) return null;
+    return { m, item: m === "tw" ? { code: sym, name: e.name || sym, market: e.market || "TWSE" } : { ticker: sym, name: e.name || sym, exchange: e.exchange || "NASDAQ" }, outside: true };
+  }
+
+  // ---------- 自選股分頁存檔（依序存，快速連續改不會互相蓋掉） ----------
+  const grpMsg = document.getElementById("grp-msg");
+  let saving = Promise.resolve();
+  function persist() {
+    saving = saving.then(async () => {
+      grpMsg.textContent = "儲存中…";
+      try { await App.saveGroups(groups); grpMsg.textContent = "已儲存"; setTimeout(() => { if (grpMsg.textContent === "已儲存") grpMsg.textContent = ""; }, 2000); }
+      catch (err) { grpMsg.textContent = "⚠ " + err.message; }
+    });
+    return saving;
+  }
+
+  // 頁簽：庫存股（固定）＋自選股分頁
+  const tabsEl = document.getElementById("grp-tabs");
+  function renderTabs() {
+    const tab = (v, name, n, title) => '<button type="button" role="tab" data-v="' + v + '" aria-selected="' + (String(view) === String(v)) + '" aria-pressed="' + (String(view) === String(v)) + '"' + (title ? ' title="' + title + '"' : "") + ">" +
+      '<span class="g-name">' + App.esc(name) + '</span><span class="g-cnt">' + n + "</span></button>";
+    tabsEl.innerHTML = tab("hold", "庫存股", holdKeys().length, "匯入的持股（只存在這台裝置）") +
+      groups.map((g, i) => tab(i, g.name, g.items.length, "雙擊可以改名稱")).join("");
+    document.getElementById("grp-del").disabled = !isGroup() || groups.length <= 1;
+    document.getElementById("grp-ren").disabled = !isGroup();
+    document.getElementById("view-title").textContent = view === "tw" || view === "us" ? viewName() + " " + viewKeys().length + " 檔（追蹤清單）" : "";
+  }
+  const vOf = (b) => (b.dataset.v === "hold" ? "hold" : +b.dataset.v);
+  tabsEl.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-v]");
+    if (!b || b.querySelector("input") || vOf(b) === view) return;
+    showView(vOf(b));
+  });
+  tabsEl.addEventListener("dblclick", (e) => {
+    const b = e.target.closest("button[data-v]");
+    if (b && b.dataset.v !== "hold") rename(+b.dataset.v);
+  });
+  // 改名稱：頁簽變成輸入框，Enter 或點別處存檔，Esc 取消
+  function rename(i) {
+    if (view !== i) showView(i);
+    const b = tabsEl.querySelector('button[data-v="' + i + '"]');
+    if (!b || b.querySelector("input")) return;
+    const old = groups[i].name;
+    b.innerHTML = '<input class="g-input" maxlength="16" aria-label="分頁名稱">';
+    const inp = b.querySelector("input");
+    inp.value = old;
+    inp.focus();
+    inp.select();
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      const v = inp.value.replace(/[\u0000-\u001f"\\<>]/g, "").trim().slice(0, 16);
+      if (save && v && v !== old) { groups[i].name = v; persist(); }
+      renderTabs();
+    };
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      e.stopPropagation();
+    });
+    inp.addEventListener("blur", () => finish(true));
+    inp.addEventListener("click", (e) => e.stopPropagation());
+  }
+  document.getElementById("grp-ren").addEventListener("click", () => { if (isGroup()) rename(view); });
+  document.getElementById("grp-add").addEventListener("click", () => {
+    if (groups.length >= 30) { alert("最多 30 個自選股分頁。"); return; }
+    const used = new Set(groups.map((g) => g.name));
+    let n = groups.length + 1;
+    while (used.has("自選" + n)) n++;
+    groups.push({ name: "自選" + n, items: [] });
+    showView(groups.length - 1);
+    persist();
+    rename(view);
+  });
+  document.getElementById("grp-del").addEventListener("click", () => {
+    if (!isGroup() || groups.length <= 1) return;
+    const g = groups[view];
+    if (!confirm("刪除分頁「" + g.name + "」？" + (g.items.length ? "\n裡面的 " + g.items.length + " 檔仍會留在追蹤清單（左側「台股」「美股」看得到）。" : ""))) return;
+    groups.splice(view, 1);
+    showView(Math.max(0, view - 1));
+    persist();
+  });
+
+  // ---------- 顯示目前畫面 ----------
+  const grid = document.getElementById("grid");
+  function showView(v) {
+    view = v;
+    try { localStorage.setItem("watch-view-key", isGroup() ? "g" + view : view); } catch (e) {}
+    const hash = "#" + (isGroup() ? "g" + (view + 1) : view);
+    if (location.hash !== hash) history.replaceState(null, "", hash);
+    // 左側選單：台股／美股／自選股
+    document.querySelectorAll(".sidebar a.sub").forEach((a) => {
+      const h = a.getAttribute("href") || "";
+      if (/^(index\.html)?#(tw|us|hold)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + (view === "tw" || view === "us" ? view : "hold")));
+    });
+    renderTabs();
+    renderCards();
+    if (document.querySelector("main").classList.contains("mode-list")) { renderList("tw"); renderList("us"); }
+    renderHold();
+    if (liveCtl) liveCtl.now();
+  }
+  window.addEventListener("hashchange", () => { const v = viewFromHash(); if (v != null && v !== view) showView(v); });
+
+  function renderCards() {
+    grid.innerHTML = "";
+    twCards.clear();
+    const rmTitle = view === "tw" || view === "us" ? "從追蹤清單移除" : view === "hold" ? "從庫存移除" : "從這個分頁移除";
+    for (const k of viewKeys()) {
+      const x = entryOf(k);
+      if (!x) continue;
+      const { m, item } = x, sym = App.symbolOf(item);
       const a = document.createElement("a");
       a.className = "card";
       a.href = "stock.html?symbol=" + encodeURIComponent(sym) + "&m=" + m;
       a.innerHTML = '<div class="card-head"><strong></strong><span></span></div>' +
         (hold[m][sym] ? '<div class="hold-line" data-k="' + m + ":" + App.esc(sym) + '"></div>' : "") + '<div class="mini"></div>' +
-        '<button type="button" class="rm" title="從追蹤清單移除">×</button>';
+        '<button type="button" class="rm" title="' + rmTitle + '">×</button>';
       a.querySelector("strong").textContent = item.name;
-      a.querySelector("span").textContent = sym;
-      a.querySelector(".rm").setAttribute("aria-label", "從追蹤清單移除 " + item.name);
-      a.querySelector(".rm").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); removeStock(m, item, a); });
-      el.appendChild(a);
+      a.querySelector("span").textContent = (m === "us" && view !== "us" ? "美・" : "") + sym;
+      a.querySelector(".rm").setAttribute("aria-label", rmTitle + " " + item.name);
+      a.querySelector(".rm").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); removeKey(k, a); });
+      grid.appendChild(a);
       if (m === "tw") twCards.set(sym, a.querySelector(".mini"));
       ownMini(a.querySelector(".mini"), item);
     }
-    // 最後一格是「＋」：加入新的追蹤股票
+    // 最後一格「＋」：庫存股開匯入庫存，其他開搜尋
     const add = document.createElement("button");
     add.type = "button";
     add.className = "card add-card";
-    add.innerHTML = '<span class="plus">＋</span><span>加入' + (m === "tw" ? "台股" : "美股") + "</span>";
-    add.addEventListener("click", () => openAdd(m));
-    el.appendChild(add);
+    add.innerHTML = '<span class="plus">＋</span><span>' + (view === "hold" ? "匯入庫存" : view === "tw" ? "加入台股" : view === "us" ? "加入美股" : "加入股票") + "</span>";
+    add.addEventListener("click", addClick);
+    grid.appendChild(add);
   }
+  function addClick() { if (view === "hold") openHold(); else openAdd(); }
 
-  // ---------- 加入／移除（寫回 GitHub 上的 config/watchlist.json） ----------
+  // ---------- 加入股票（搜尋）：台股／美股畫面加進追蹤清單；自選股分頁加進分頁（新股票也加進追蹤清單） ----------
   const dlg = document.getElementById("add-dlg"), addQ = document.getElementById("add-q");
   const addList = document.getElementById("add-list"), addMsg = document.getElementById("add-msg");
-  let addMarket = "tw", picks = [], busy = false;
-  function openAdd(m) {
-    addMarket = m;
+  let picks = [], busy = false;
+  function openAdd() {
     addQ.value = "";
     addList.innerHTML = "";
-    addMsg.textContent = m === "tw" ? "台股上市、上櫃都可以加入。" : "美股 Nasdaq、NYSE 都可以加入。";
+    document.getElementById("add-title").textContent = "加入股票到「" + viewName() + "」";
+    addMsg.textContent = view === "tw" ? "台股上市、上櫃都可以加入。" : view === "us" ? "美股 Nasdaq、NYSE 都可以加入。" : "台股上市、上櫃，美股 Nasdaq、NYSE 都可以加入。";
     dlg.showModal();
     addQ.focus();
     App.loadStockList().catch(() => {});
   }
   let st;
   addQ.addEventListener("input", () => { clearTimeout(st); st = setTimeout(searchAdd, 120); });
-  addQ.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (picks[0]) addStock(picks[0]); } });
+  addQ.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); const p = picks.find((r) => !viewSet().has(keyOf(r.m, r.symbol))); if (p) addStock(p); } });
   async function searchAdd() {
     const q = addQ.value.trim();
     if (!q) { addList.innerHTML = ""; return; }
-    const res = (await App.searchStocks(q, 40)).filter((r) => r.m === addMarket).slice(0, 8);
+    let res = await App.searchStocks(q, 40);
+    if (view === "tw" || view === "us") res = res.filter((r) => r.m === view);
+    res = res.slice(0, 10);
     if (addQ.value.trim() !== q) return;
     picks = res;
-    const have = new Set((addMarket === "tw" ? w.tw : w.us).map((x) => App.symbolOf(x).toUpperCase()));
-    addList.innerHTML = res.length ? res.map((r, i) =>
-      '<li><button type="button" data-i="' + i + '"' + (have.has(r.symbol) ? " disabled" : "") + "><b>" + App.esc(r.symbol) + "</b> " + App.esc(r.name) +
-      ' <span>' + App.esc(r.tag) + (have.has(r.symbol) ? "・已在清單" : "") + "</span></button></li>").join("") : '<li class="empty">找不到符合的股票</li>';
+    const here = viewSet();
+    addList.innerHTML = res.length ? res.map((r, i) => {
+      const k = keyOf(r.m, r.symbol), has = here.has(k);
+      return '<li><button type="button" data-i="' + i + '"' + (has ? " disabled" : "") + "><b>" + App.esc(r.symbol) + "</b> " + App.esc(r.name) +
+        ' <span>' + (r.m === "us" ? "美股・" : "") + App.esc(r.tag) + (has ? "・已在這裡" : itemOf[k] ? "・在追蹤清單" : "") + "</span></button></li>";
+    }).join("") : '<li class="empty">找不到符合的股票</li>';
   }
   addList.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-i]");
@@ -182,27 +365,138 @@
     busy = true;
     addMsg.textContent = "加入 " + r.symbol + " " + r.name + " 中…";
     try {
-      await App.editWatchlist("add", r.m, r.item);
-      addMsg.textContent = "已加入 " + r.symbol + " " + r.name + "。完整資料約 2～3 分鐘後產生，之後每天自動更新。";
-      setTimeout(() => location.reload(), 1200);
+      const res = await addKeys([{ m: r.m, code: r.symbol, item: r.item }]);
+      addMsg.textContent = "已加入 " + r.symbol + " " + r.name + "。" + (res.fresh ? "完整資料約 2～3 分鐘後產生，之後每天自動更新。" : "");
+      if (res.fresh) setTimeout(() => location.reload(), 1200);
+      else { busy = false; searchAdd(); }
     } catch (err) {
       addMsg.textContent = "⚠ " + err.message;
       busy = false;
     }
   }
-  async function removeStock(m, item, card) {
-    if (!confirm("從追蹤清單移除「" + item.name + "（" + App.symbolOf(item) + "）」？")) return;
-    card.classList.add("busy");
-    try {
-      await App.editWatchlist("remove", m, item);
-      // 清單模式移除後重新整理（卡片和表格都要更新）；方塊模式直接拿掉卡片
-      if (card.tagName === "TR") location.reload();
-      else card.remove();
-    } catch (err) {
-      card.classList.remove("busy");
-      alert(err.message);
+  // 加進目前畫面：不在追蹤清單的先加進追蹤清單；自選股分頁再加進分頁。回傳 { fresh: 新加進追蹤清單的檔數 }
+  async function addKeys(list) {
+    const fresh = list.filter((x) => !itemOf[keyOf(x.m, x.code)]);
+    for (const m of ["tw", "us"]) {
+      const items = fresh.filter((x) => x.m === m).map((x) => x.item);
+      if (items.length) { w = await App.editWatchlist("add", m, items); w = { tw: w.tw || [], us: w.us || [] }; }
     }
+    if (fresh.length) { indexItems(); listState.tw.rows = listState.us.rows = null; }
+    if (isGroup()) {
+      const g = groups[view], have = new Set(g.items);
+      list.forEach((x) => { const k = keyOf(x.m, x.code); if (!have.has(k)) { have.add(k); g.items.push(k); } });
+      await persist();
+    }
+    if (!fresh.length) showView(view);
+    return { fresh: fresh.length };
   }
+
+  // ×：台股／美股畫面＝從追蹤清單移除（也從各分頁拿掉）；庫存股＝刪掉這台裝置的持股資料；自選股分頁＝只從分頁移除
+  async function removeKey(k, el) {
+    const x = entryOf(k), label = x.item.name + "（" + App.symbolOf(x.item) + "）";
+    if (view === "hold") {
+      if (!confirm("從庫存移除「" + label + "」？（只刪這台裝置的持股資料，追蹤清單不變）")) return;
+      delete hold[x.m][App.symbolOf(x.item)];
+      try { Holdings.save(hold); } catch (err) {}
+      showView(view);
+      return;
+    }
+    if (isGroup()) {
+      if (!confirm("從「" + groups[view].name + "」移除「" + label + "」？（仍留在追蹤清單）")) return;
+      groups[view].items = groups[view].items.filter((y) => y !== k);
+      showView(view);
+      persist();
+      return;
+    }
+    const inGroups = groups.filter((g) => g.items.includes(k)).map((g) => g.name);
+    if (!confirm("從追蹤清單移除「" + label + "」？不再每天抓它的資料。" + (inGroups.length ? "\n也會從自選股分頁移除：" + inGroups.join("、") : ""))) return;
+    el.classList.add("busy");
+    try {
+      w = await App.editWatchlist("remove", x.m, x.item);
+      w = { tw: w.tw || [], us: w.us || [] };
+    } catch (err) { el.classList.remove("busy"); alert(err.message); return; }
+    indexItems();
+    listState.tw.rows = listState.us.rows = null;
+    if (inGroups.length) { groups.forEach((g) => { g.items = g.items.filter((y) => y !== k); }); persist(); }
+    showView(view);
+  }
+
+  // ---------- 匯出／匯入（每個畫面都可以） ----------
+  function download(name, text) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + text], { type: "text/csv" }));  // 加 BOM：Excel 開中文不會亂碼
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  const today = () => new Date().toLocaleDateString("sv-SE");  // 本地日期 YYYY-MM-DD
+  document.getElementById("io-export").addEventListener("click", () => {
+    if (view === "hold") { download("庫存股_" + today() + ".csv", Holdings.toCsv(hold)); return; }
+    const q = (s) => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
+    const lines = ["市場,代號,名稱"].concat(viewKeys().map((k) => { const x = entryOf(k); return x ? [x.m === "tw" ? "台股" : "美股", App.symbolOf(x.item), q(x.item.name)].join(",") : null; }).filter(Boolean));
+    download(viewName().replace(/[\\/:*?"<>|]/g, "_") + "_" + today() + ".csv", lines.join("\n") + "\n");
+  });
+  document.getElementById("io-import").addEventListener("click", () => { if (view === "hold") openHold(); else openList(); });
+
+  // 股票清單匯入（自選股分頁、台股、美股）：貼上或選檔 → 預覽勾選 → 加入
+  const ld = {
+    dlg: document.getElementById("list-dlg"), text: document.getElementById("list-text"), file: document.getElementById("list-file"),
+    step1: document.getElementById("list-step1"), step2: document.getElementById("list-step2"), preview: document.getElementById("list-preview"),
+    msg: document.getElementById("list-msg"), save: document.getElementById("list-save"), back: document.getElementById("list-back"),
+  };
+  let lparsed = null, listBusy = false;
+  function listStep(n) { ld.step1.hidden = n !== 1; ld.step2.hidden = n !== 2; ld.save.hidden = n !== 2; ld.back.hidden = n !== 2; }
+  function openList() {
+    document.getElementById("list-title").textContent = "匯入股票到「" + viewName() + "」";
+    listStep(1); ld.msg.textContent = ""; ld.file.value = "";
+    ld.dlg.showModal();
+    App.loadStockList().catch(() => {});
+  }
+  async function runListParse(getRows) {
+    ld.msg.textContent = "解析中…";
+    try {
+      const [rows, list] = await Promise.all([getRows(), App.loadStockList()]);
+      lparsed = Holdings.parseList(rows, list);
+    } catch (err) { ld.msg.textContent = "⚠ " + err.message; return; }
+    if (view === "tw" || view === "us") lparsed.items = lparsed.items.filter((it) => it.m === view);
+    if (!lparsed.items.length) { ld.msg.textContent = "⚠ 找不到" + (view === "us" ? "美股" : view === "tw" ? "台股" : "股票") + "代號或名稱。"; return; }
+    const here = viewSet();
+    ld.preview.innerHTML = '<div class="table-wrap hold-table"><table><thead><tr><th></th><th class="l">代號</th><th class="l">名稱</th><th class="l">狀態</th></tr></thead><tbody>' +
+      lparsed.items.map((it, i) => {
+        const k = keyOf(it.m, it.code), has = here.has(k);
+        return '<tr data-i="' + i + '"><td><input type="checkbox"' + (has ? " disabled" : " checked") + ' aria-label="加入 ' + App.esc(it.name) + '"></td>' +
+          '<td class="l">' + App.esc(it.code) + (it.m === "us" ? ' <span class="tag-us">美</span>' : "") + '</td><td class="l">' + App.esc(it.name) + "</td>" +
+          '<td class="l updated">' + (has ? "已在這裡" : itemOf[k] ? "在追蹤清單" : "新股票") + "</td></tr>";
+      }).join("") + "</tbody></table></div>" +
+      (lparsed.skipped.length ? '<details class="updated"><summary>略過 ' + lparsed.skipped.length + " 列</summary>" +
+        lparsed.skipped.map((x) => "<div>" + App.esc(x.text.slice(0, 60)) + "（" + x.why + "）</div>").join("") + "</details>" : "");
+    ld.preview.onchange = updateListSave;
+    updateListSave();
+    ld.msg.textContent = "";
+    listStep(2);
+  }
+  const listChosen = () => [...ld.preview.querySelectorAll("tr[data-i]")].filter((tr) => tr.querySelector("input").checked).map((tr) => lparsed.items[+tr.dataset.i]);
+  function updateListSave() { ld.save.textContent = "加入 " + listChosen().length + " 檔"; }
+  document.getElementById("list-parse").addEventListener("click", () => {
+    if (!ld.text.value.trim()) { ld.msg.textContent = "請先貼上股票清單，或選擇檔案。"; return; }
+    runListParse(async () => Holdings.textRows(ld.text.value));
+  });
+  ld.file.addEventListener("change", () => { if (ld.file.files[0]) runListParse(() => Holdings.fileRows(ld.file.files[0])); });
+  ld.back.addEventListener("click", () => { listStep(1); ld.msg.textContent = ""; ld.file.value = ""; });
+  ld.save.addEventListener("click", async () => {
+    if (listBusy) return;
+    const items = listChosen();
+    if (!items.length) { ld.msg.textContent = "請至少勾選一檔。"; return; }
+    listBusy = true;
+    ld.msg.textContent = "加入中…";
+    try {
+      const res = await addKeys(items.map((it) => ({ m: it.m, code: it.code, item: it.m === "tw" ? { code: it.code, name: it.name, market: it.market } : { ticker: it.code, name: it.name, exchange: it.exchange } })));
+      ld.msg.textContent = "已加入 " + items.length + " 檔" + (res.fresh ? "（其中 " + res.fresh + " 檔是新股票，完整資料約 2～3 分鐘後產生）" : "") + "。";
+      if (res.fresh) setTimeout(() => location.reload(), 1500);
+      else setTimeout(() => ld.dlg.close(), 800);
+    } catch (err) { ld.msg.textContent = "⚠ " + err.message; }
+    listBusy = false;
+  });
 
   // 頁首報價列：讀 summary.json（紅漲綠跌）；讀不到就退回 TradingView 跑馬燈
   async function ownTape(host) {
@@ -300,13 +594,14 @@
       const c = Holdings.calc(e, px[m][code]);
       el.innerHTML = "<span>持有 " + shareFmt(e.shares) + " 股" + (App.isNum(c.avg) ? "・均 " + App.fmtNum(c.avg, 2) : "") + "</span> " + plHtml(m, c);
     });
-    // 每個分頁上方的總計
+    // 目前畫面裡的持股總計（台股、美股分開：幣別不同）
+    const here = viewSet();
     for (const m of ["tw", "us"]) {
-      const el = document.getElementById(m + "-hsum"), codes = Object.keys(hold[m]);
+      const el = document.getElementById(m + "-hsum");
+      const codes = Object.keys(hold[m]).filter((c) => here.has(keyOf(m, c)));
       el.hidden = !codes.length;
       if (!codes.length) continue;
       let mv = 0, cost = 0, mvC = 0, noPx = 0, noCost = 0;
-      const inW = new Set(w[m].map((x) => App.symbolOf(x).toUpperCase()));
       for (const code of codes) {
         const e = hold[m][code], p = px[m][code];
         if (!App.isNum(p)) { noPx++; continue; }
@@ -315,13 +610,13 @@
       }
       const pl = cost ? mvC - cost : null;
       const notes = [];
-      const outside = codes.filter((c) => !inW.has(c)).length;
-      if (outside) notes.push(outside + " 檔不在追蹤清單");
+      const outside = codes.filter((c) => !itemOf[keyOf(m, c)]).length;
+      if (outside) notes.push(outside + " 檔不在追蹤清單（不會每天抓資料）");
       if (noPx) notes.push(noPx + " 檔沒有股價，未計入");
       if (noCost) notes.push(noCost + " 檔沒有成本，損益未計入");
       notes.push("損益未扣賣出手續費與稅");
       el.innerHTML =
-        "<div><span>持股 <b>" + codes.length + "</b> 檔</span>" +
+        "<div><span>" + (m === "tw" ? "台股" : "美股") + "持股 <b>" + codes.length + "</b> 檔</span>" +
         "<span>市值 <b>" + money(m, mv) + "</b></span>" +
         "<span>成本 <b>" + (cost ? money(m, cost) : "—") + "</b></span>" +
         '<span>未實現損益 <b class="' + App.upDown(pl) + '">' + (pl == null ? "—" : money(m, pl, true) + "（" + App.fmtPct(pl / cost * 100, true) + "）") + "</b></span></div>" +
@@ -329,7 +624,7 @@
     }
   }
 
-  // 匯入對話框
+  // 匯入庫存對話框
   const hd = {
     dlg: document.getElementById("hold-dlg"), text: document.getElementById("hold-text"), file: document.getElementById("hold-file"),
     step1: document.getElementById("hold-step1"), step2: document.getElementById("hold-step2"), preview: document.getElementById("hold-preview"),
@@ -346,21 +641,16 @@
     const t = Holdings.count(hold, "tw"), u = Holdings.count(hold, "us");
     hd.cur.innerHTML = t + u ? "目前持股：台股 " + t + "、美股 " + u + ' 檔 <button type="button" class="linkish" data-act="backup">備份</button> <button type="button" class="linkish" data-act="clear">清除</button>' : "目前沒有持股資料";
   }
-  document.getElementById("hold-btn").addEventListener("click", () => {
+  function openHold() {
     holdStep(1); hd.msg.textContent = ""; hd.file.value = ""; holdCur();
     hd.dlg.showModal();
     App.loadStockList().catch(() => {});
-  });
+  }
   hd.cur.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]");
     if (!b) return;
-    if (b.dataset.act === "backup") {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([Holdings.toCsv(hold)], { type: "text/csv" }));
-      a.download = "持股備份_" + new Date().toISOString().slice(0, 10) + ".csv";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } else if (confirm("清除這台裝置上的全部持股資料？（追蹤清單不受影響）")) {
+    if (b.dataset.act === "backup") download("庫存股_" + today() + ".csv", Holdings.toCsv(hold));
+    else if (confirm("清除這台裝置上的全部持股資料？（追蹤清單不受影響）")) {
       hold.tw = {}; hold.us = {};
       try { Holdings.save(hold); } catch (err) {}
       location.reload();
@@ -387,13 +677,12 @@
   hd.back.addEventListener("click", () => { holdStep(1); hd.msg.textContent = ""; hd.file.value = ""; });
 
   function showPreview() {
-    const inW = { tw: new Set(w.tw.map((x) => x.code)), us: new Set(w.us.map((x) => x.ticker.toUpperCase())) };
     hd.preview.innerHTML =
       '<div class="table-wrap hold-table"><table><thead><tr><th></th><th class="l">代號</th><th class="l">名稱</th><th>股數</th><th>成本均價</th><th>總成本</th></tr></thead><tbody>' +
       parsed.items.map((it, i) =>
         '<tr data-i="' + i + '"><td><input type="checkbox" checked aria-label="匯入 ' + App.esc(it.name) + '"></td>' +
         '<td class="l">' + App.esc(it.code) + (it.m === "us" ? ' <span class="tag-us">美</span>' : "") + "</td>" +
-        '<td class="l">' + App.esc(it.name) + (inW[it.m].has(it.code) ? "" : ' <span class="updated">新</span>') + "</td>" +
+        '<td class="l">' + App.esc(it.name) + (itemOf[keyOf(it.m, it.code)] ? "" : ' <span class="updated">新</span>') + "</td>" +
         '<td><input type="number" class="h-sh" min="0" step="any" value="' + it.shares + '" aria-label="股數"></td>' +
         '<td><input type="number" class="h-avg" min="0" step="any" value="' + (it.cost != null ? +(it.cost / it.shares).toFixed(4) : "") + '" placeholder="不填" aria-label="成本均價"></td>' +
         '<td class="h-cost">' + (it.cost != null ? money(it.m, it.cost) : "—") + "</td></tr>").join("") +
@@ -421,14 +710,12 @@
   function chosen() {
     return [...hd.preview.querySelectorAll("tr[data-i]")].filter((tr) => tr.querySelector("input[type=checkbox]").checked).map((tr) => parsed.items[+tr.dataset.i]);
   }
-  function newOnes() {
-    const inW = { tw: new Set(w.tw.map((x) => x.code)), us: new Set(w.us.map((x) => x.ticker.toUpperCase())) };
-    return chosen().filter((it) => !inW[it.m].has(it.code));
-  }
+  // 不在追蹤清單的持股（可以一起加進追蹤清單，每天抓資料）
+  function newOnes() { return chosen().filter((it) => !itemOf[keyOf(it.m, it.code)]); }
   function updateAddw() {
     const n = newOnes().length;
     hd.addwWrap.hidden = !n;
-    hd.addwText.textContent = "不在追蹤清單的 " + n + " 檔一起加入追蹤清單";
+    hd.addwText.textContent = "不在追蹤清單的 " + n + " 檔一起加入追蹤清單（每天抓資料）";
     hd.save.textContent = "匯入 " + chosen().length + " 檔";
   }
   hd.save.addEventListener("click", async () => {
@@ -445,8 +732,9 @@
       next[it.m][it.code] = e;
     }
     try { Holdings.save(next); } catch (err) { hd.msg.textContent = "⚠ 瀏覽器不能儲存（可能是無痕模式）：" + err.message; return; }
+    try { localStorage.setItem("watch-view-key", "hold"); } catch (err) {}
     const add = hd.addw.checked ? newOnes() : [];
-    if (!add.length) { hd.msg.textContent = "已匯入 " + items.length + " 檔。"; setTimeout(() => location.reload(), 600); return; }
+    if (!add.length) { hd.msg.textContent = "已匯入 " + items.length + " 檔。"; setTimeout(() => { location.hash = "#hold"; location.reload(); }, 600); return; }
     holdBusy = true;
     hd.msg.textContent = "持股已存好。加入追蹤清單中…";
     try {
@@ -455,79 +743,65 @@
         if (list.length) await App.editWatchlist("add", m, list);
       }
       hd.msg.textContent = "已匯入 " + items.length + " 檔，新增 " + add.length + " 檔到追蹤清單（完整資料約 2～3 分鐘後產生）。";
-      setTimeout(() => location.reload(), 1500);
+      setTimeout(() => { location.hash = "#hold"; location.reload(); }, 1500);
     } catch (err) {
       hd.msg.textContent = "持股已存好，但加入追蹤清單失敗：" + err.message;
       holdBusy = false;
     }
   });
 
-  addCards(w.tw, document.getElementById("tw"), "tw");
-  addCards(w.us, document.getElementById("us"), "us");
-
-  // 台股／美股分頁：網址 #tw、#us 可直接指定（左側選單用），否則用上次看的分頁
-  const tabBtns = document.querySelectorAll(".mk-tabs button");
-  tabBtns.forEach((b) => { b.textContent += "（" + w[b.dataset.mk].length + "）"; });
-  function showTab(mk) {
-    tabBtns.forEach((b) => {
-      const on = b.dataset.mk === mk;
-      b.setAttribute("aria-pressed", String(on));
-      b.setAttribute("aria-selected", String(on));
-    });
-    document.getElementById("pane-tw").hidden = mk !== "tw";
-    document.getElementById("pane-us").hidden = mk !== "us";
-    // 左側選單「我的追蹤 → 台股／美股」跟著標示目前分頁
-    document.querySelectorAll(".sidebar a.sub").forEach((a) => {
-      const h = a.getAttribute("href");
-      if (/#(tw|us)$/.test(h)) a.classList.toggle("cur", h.endsWith("#" + mk));
-    });
-    try { localStorage.setItem("watch-tab", mk); } catch (e) {}
-  }
-  tabBtns.forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", "#" + b.dataset.mk); showTab(b.dataset.mk); }));
-  window.addEventListener("hashchange", () => { if (/^#(tw|us)$/.test(location.hash)) showTab(location.hash.slice(1)); });
-  // 顯示方式：小方塊／大方塊／清單（記在瀏覽器，兩個分頁一起套用）
+  // 顯示方式：小方塊／大方塊／清單（記在瀏覽器）
   const viewBtns = document.querySelectorAll(".view-btns button");
-  function setView(v) {
-    ["tw", "us"].forEach((id) => {
-      const g = document.getElementById(id);
-      g.classList.remove("view-small", "view-large", "view-list");
-      g.classList.add("view-" + v);
-    });
+  function setLayout(v) {
+    grid.classList.remove("view-small", "view-large", "view-list");
+    grid.classList.add("view-" + v);
     document.querySelector("main").classList.toggle("mode-list", v === "list");
     if (v === "list") { renderList("tw"); renderList("us"); }
     viewBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
     try { localStorage.setItem("watch-view", v); } catch (e) {}
   }
 
-  // ---------- 清單模式：欄位和全台股總表相同（assets/stockcols.js），多一欄近一年走勢 ----------
+  // ---------- 清單模式：欄位和全台股總表相同（assets/stockcols.js），多一欄近一年走勢；台股、美股各一張表 ----------
   const listState = { tw: { key: null, dir: 1, rows: null }, us: { key: null, dir: 1, rows: null } };
+  const listSrc = { tw: null, us: null };  // 全台股總表、summary.json（庫存股裡不在追蹤清單的也查得到）
   async function listRows(m) {
     if (listState[m].rows) return listState[m].rows;
     if (m === "tw") {
-      let all = null;
-      try { all = await Refs.load(); } catch (e) {}
-      const pegLv = all ? Refs.levelsFor(all.rows, "peg") : {};
-      listState.tw.pegLv = pegLv;
-      listState.tw.rows = w.tw.map((it) => {
-        const s = Object.assign({ code: it.code, name: it.name, market: it.market }, all && all.byCode[it.code]);
-        s.peg_any = App.isNum(s.peg) ? s.peg : s.peg_est;
-        s._item = it;
-        applyQuote(s, lastQ[it.code]);
-        return s;
-      });
+      if (!listSrc.tw) { try { listSrc.tw = await Refs.load(); } catch (e) { listSrc.tw = { rows: [], byCode: {} }; } }
+      listState.tw.pegLv = Refs.levelsFor(listSrc.tw.rows, "peg");
+      listState.tw.rows = w.tw.map((it) => twRow(it));
     } else {
-      let sum = null;
-      try { sum = await App.loadJSON("data/summary.json"); } catch (e) {}
-      const bySym = {};
-      ((sum && sum.stocks) || []).filter((x) => x.market === "US").forEach((x) => { bySym[x.symbol] = StockCols.fromSummary(x); });
-      listState.us.rows = w.us.map((it) => Object.assign({ code: it.ticker, name: it.name }, bySym[it.ticker.toUpperCase()], { _item: it }));
+      await usSrc();
+      listState.us.rows = w.us.map((it) => usRow(it));
     }
     return listState[m].rows;
   }
+  function twRow(it) {
+    const s = Object.assign({ code: it.code, name: it.name, market: it.market }, listSrc.tw && listSrc.tw.byCode[it.code]);
+    s.peg_any = App.isNum(s.peg) ? s.peg : s.peg_est;
+    s._item = it;
+    applyQuote(s, lastQ[it.code]);
+    return s;
+  }
+  async function usSrc() {
+    if (listSrc.us) return;
+    let sum = null;
+    try { sum = await App.loadJSON("data/summary.json"); } catch (e) {}
+    listSrc.us = {};
+    ((sum && sum.stocks) || []).filter((x) => x.market === "US").forEach((x) => { listSrc.us[x.symbol] = StockCols.fromSummary(x); });
+  }
+  function usRow(it) { return Object.assign({ code: it.ticker, name: it.name }, listSrc.us[it.ticker.toUpperCase()], { _item: it }); }
 
   async function renderList(m) {
     const host = document.getElementById(m + "-list");
-    const rows = await listRows(m);
+    const keys = viewKeys().filter((k) => k.startsWith(m + ":"));
+    const all = await listRows(m);
+    const byCode = new Map(all.map((s) => [keyOf(m, s.code), s]));
+    // 庫存股裡不在追蹤清單的：用總表資料補一列
+    const rows = keys.map((k) => byCode.get(k) || (entryOf(k) && (m === "tw" ? twRow(entryOf(k).item) : usRow(entryOf(k).item)))).filter(Boolean);
+    const onlyMarket = !viewKeys().some((k) => !k.startsWith(m + ":"));
+    host.hidden = !rows.length && !(m === "tw" && !viewKeys().length) && !(view === m);
+    if (host.hidden) return;
     const base = m === "tw" ? StockCols.tw(listState.tw.pegLv || {}) : StockCols.us();
     // 走勢圖放在「漲跌」後面
     const at = base.findIndex((c) => c.k === "change_pct") + 1;
@@ -550,16 +824,18 @@
         return (typeof x === "string" ? x.localeCompare(y, "zh-TW") : x - y) * st.dir;
       });
     }
+    const rmTitle = view === "tw" || view === "us" ? "從追蹤清單移除" : view === "hold" ? "從庫存移除" : "從這個分頁移除";
     host.innerHTML =
+      (!onlyMarket ? '<div class="list-cap">' + (m === "tw" ? "台股" : "美股") + " " + list.length + " 檔</div>" : "") +
       '<div class="table-wrap big-table watch-table"><table><thead><tr>' +
         cols.map((c, i) => '<th class="' + (c.nosort ? "" : "sort") + (c.l ? " l" : "") + (i < 2 ? " stick s" + i : "") + '"' +
           (c.nosort ? "" : ' data-k="' + c.k + '" tabindex="0"') + (st.key === c.k ? ' aria-sort="' + (st.dir > 0 ? "ascending" : "descending") + '"' : "") + ">" + c.t + "</th>").join("") +
         "<th></th></tr></thead><tbody>" +
         list.map((s) => '<tr class="link" data-sym="' + App.esc(s.code) + '">' +
           cols.map((c, i) => "<td" + (c.l || i < 2 ? ' class="' + (c.l ? "l" : "") + (i < 2 ? " stick s" + i : "") + '"' : "") + ">" + c.f(s) + "</td>").join("") +
-          '<td><button type="button" class="rm-row" title="從追蹤清單移除" aria-label="從追蹤清單移除 ' + App.esc(s.name) + '">×</button></td></tr>').join("") +
+          '<td><button type="button" class="rm-row" title="' + rmTitle + '" aria-label="' + rmTitle + " " + App.esc(s.name) + '">×</button></td></tr>').join("") +
       "</tbody></table></div>" +
-      '<button type="button" class="list-add">＋ 加入' + (m === "tw" ? "台股" : "美股") + "</button>";
+      ((m === "us" || !viewKeys().some((k) => k.startsWith("us:"))) ? '<button type="button" class="list-add">＋ ' + (view === "hold" ? "匯入庫存" : "加入股票") + "</button>" : "");
     if (scrollX) host.querySelector(".table-wrap").scrollLeft = scrollX;
 
     // 走勢圖：資料到了就畫上去
@@ -583,52 +859,54 @@
       const tr = e.target.closest("tr[data-sym]");
       if (!tr) return;
       const s = list.find((x) => x.code === tr.dataset.sym);
-      if (e.target.closest(".rm-row")) { removeStock(m, s._item, tr); return; }
+      if (e.target.closest(".rm-row")) { removeKey(keyOf(m, s.code), tr); return; }
       location.href = "stock.html?symbol=" + encodeURIComponent(s.code) + "&m=" + m;
     });
-    host.querySelector(".list-add").addEventListener("click", () => openAdd(m));
+    const la = host.querySelector(".list-add");
+    if (la) la.addEventListener("click", addClick);
   }
-  viewBtns.forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
-  let view = "large";
-  try { view = localStorage.getItem("watch-view") || "large"; } catch (e) {}
-  setView(["small", "large", "list"].includes(view) ? view : "large");
 
-  let first = /^#(tw|us)$/.test(location.hash) ? location.hash.slice(1) : null;
-  if (!first) { try { first = localStorage.getItem("watch-tab"); } catch (e) {} }
-  showTab(first === "us" ? "us" : "tw");
-  if (Holdings.count(hold, "tw") || Holdings.count(hold, "us")) loadHoldPrices();
-
-  // ---------- 台股盤中即時（富果）：卡片、清單的股價、漲跌、成交量 ----------
+  // ---------- 台股盤中即時（富果）：目前畫面的台股卡片、清單的股價、漲跌、成交量 ----------
   // 富果免費方案每分鐘 60 次、每檔算一次：間隔隨檔數拉長（約每分鐘用 30 次，留額度給個股頁）
   function applyQuote(s, q) {
     if (!s || !q || q.price == null) return;
     s.close = q.price; s.change_pct = q.pct; s.volume = q.vol;
   }
-  if (w.tw.length) {
-    const codes = w.tw.map((x) => x.code);
-    Live.start(async () => {
-      for (let i = 0; i < codes.length; i += 20) {
-        const r = await Live.fetchRt(codes.slice(i, i + 20));
-        Object.assign(lastQ, r.quotes);
+  let liveCtl = null;
+  const twCodes = () => viewKeys().filter((k) => k.startsWith("tw:")).map((k) => k.slice(3)).slice(0, 60);
+
+  viewBtns.forEach((b) => b.addEventListener("click", () => setLayout(b.dataset.view)));
+  let layout = "large";
+  try { layout = localStorage.getItem("watch-view") || "large"; } catch (e) {}
+  setLayout(["small", "large", "list"].includes(layout) ? layout : "large");
+  showView(view);
+  if (Holdings.count(hold, "tw") || Holdings.count(hold, "us")) loadHoldPrices();
+
+  const maxTw = Math.max(1, w.tw.length, Holdings.count(hold, "tw"));
+  liveCtl = Live.start(async () => {
+    const codes = twCodes();
+    if (!codes.length) return true;
+    for (let i = 0; i < codes.length; i += 20) {
+      const r = await Live.fetchRt(codes.slice(i, i + 20));
+      Object.assign(lastQ, r.quotes);
+    }
+    for (const code of codes) {
+      const q = lastQ[code], x = entryOf("tw:" + code);
+      if (!q || !x) continue;
+      setPx("tw", code, q.price);
+      const key = "tw:" + code;
+      const d = dataCache[key] && await dataCache[key].catch(() => null);
+      if (d) {
+        d._base = d._base || d.price;
+        d.price = Live.mergeDaily(d._base, q, 1000);  // 富果的量是張，日線是股
+        d._live = q;
+        if (twCards.has(code)) ownMini(twCards.get(code), x.item);
       }
-      for (const it of w.tw) {
-        const q = lastQ[it.code];
-        if (!q) continue;
-        setPx("tw", it.code, q.price);
-        const key = "tw:" + it.code;
-        const d = dataCache[key] && await dataCache[key].catch(() => null);
-        if (d) {
-          d._base = d._base || d.price;
-          d.price = Live.mergeDaily(d._base, q, 1000);  // 富果的量是張，日線是股
-          d._live = q;
-          if (twCards.has(it.code)) ownMini(twCards.get(it.code), it);
-        }
-        applyQuote(listState.tw.rows && listState.tw.rows.find((s) => s.code === it.code), q);
-      }
-      if (listState.tw.rows && document.querySelector("main").classList.contains("mode-list")) renderList("tw");
-      return Object.values(lastQ).some((q) => q.date === Live.twNow().date);
-    }, Math.max(10000, codes.length * 2000), (s) => { document.getElementById("tw-live").innerHTML = Live.badge(s); });
-  }
+      applyQuote(listState.tw.rows && listState.tw.rows.find((s) => s.code === code), q);
+    }
+    if (listState.tw.rows && document.querySelector("main").classList.contains("mode-list")) renderList("tw");
+    return Object.values(lastQ).some((q) => q.date === Live.twNow().date);
+  }, Math.max(10000, Math.min(60, maxTw) * 2000), (s) => { document.getElementById("tw-live").innerHTML = Live.badge(s); });
 })();
 </script>
 </body>

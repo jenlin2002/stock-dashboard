@@ -231,6 +231,30 @@
     return { items, skipped, header: !!hd };
   }
 
+  // 自選股清單匯入：只要股票（不需要股數）。每列取第一個認得的股票；純數字的格子只有在它是這列第一個數字時才當代號
+  // 回傳 { items: [{ m, code, name, market|exchange }], skipped: [{ text, why }] }
+  function parseList(rows, list) {
+    const ix = indexList(list);
+    const byKey = new Map(), skipped = [];
+    for (const cells of rows) {
+      const text = cells.filter(Boolean).join(" ");
+      if (!text || cells.some((c) => RE.skipRow.test(c.replace(/\s/g, "")))) continue;
+      let stock = null;
+      for (let j = 0; j < cells.length && !stock; j++) {
+        const hit = findInCell(cells[j], ix);
+        if (hit && (toNum(cells[j]) == null || cells.slice(0, j).every((c) => toNum(c) == null))) stock = hit;
+      }
+      if (!stock) { if (cells.some((c) => /\d|[A-Z]/i.test(c))) skipped.push({ text, why: "找不到股票代號或名稱" }); continue; }
+      const k = stock.m + ":" + stock.code;
+      if (!byKey.has(k)) {
+        const it = { m: stock.m, code: stock.code, name: stock.name };
+        if (stock.m === "tw") it.market = stock.market; else it.exchange = stock.exchange;
+        byKey.set(k, it);
+      }
+    }
+    return { items: [...byKey.values()], skipped };
+  }
+
   // ---------- 檔案 → 表格 ----------
   function loadScript(src, global) {
     if (root[global]) return Promise.resolve(root[global]);
@@ -293,7 +317,7 @@
     return textRows(decodeText(buf), ext === "csv");
   }
 
-  const H = { KEY, load, save, count, calc, toCsv, norm, toNum, textRows, parseRows, fileRows };
+  const H = { KEY, load, save, count, calc, toCsv, norm, toNum, textRows, parseRows, parseList, fileRows };
   if (typeof module !== "undefined" && module.exports) module.exports = H;
   else root.Holdings = H;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -21,7 +21,7 @@
   }
 
   // 新增／移除追蹤股票：呼叫 functions/api/watchlist.js（它會改 GitHub 上的 watchlist.json）
-  // item 可以是一檔，或（加入時）一個陣列：一次加入多檔、只產生一個 commit
+  // item 可以是一檔，或一個陣列：一次加入／移除多檔、只產生一個 commit
   async function editWatchlist(action, market, item) {
     const res = await fetch("api/watchlist", {
       method: "POST",
@@ -32,6 +32,32 @@
     if (!res.ok) throw new Error(body.error || "修改失敗（" + res.status + "）");
     try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify({ ts: Date.now(), data: body.watchlist })); } catch (e) {}
     return body.watchlist;
+  }
+
+  // ---------- 自選股分頁：config/groups.json（[{name, items: ["tw:2330", "us:AAPL"]}]） ----------
+  // 改過分頁後網站重新部署前（約 1～3 分鐘），用存檔 API 回傳的版本（存在瀏覽器 15 分鐘）
+  const GROUPS_KEY = "groups-override";
+  async function loadGroups(w) {
+    let g = null;
+    try {
+      const o = JSON.parse(localStorage.getItem(GROUPS_KEY) || "null");
+      if (o && Date.now() - o.ts < OVERRIDE_MS) g = o.data;
+      else localStorage.removeItem(GROUPS_KEY);
+    } catch (e) {}
+    if (!g) { try { g = (await loadJSON("config/groups.json")).groups; } catch (e) {} }
+    const ok = Array.isArray(g) && g.length && g.every((x) => x && typeof x.name === "string" && Array.isArray(x.items));
+    if (ok) return g.map((x) => ({ name: x.name, items: x.items.slice() }));
+    // 還沒有分頁檔：自選1～自選10，都是空的（全部台股、美股在左側選單；庫存股是固定的第一頁，不存在這裡）
+    const out = [];
+    for (let i = 1; i <= 10; i++) out.push({ name: "自選" + i, items: [] });
+    return out;
+  }
+  async function saveGroups(groups) {
+    const res = await fetch("api/groups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groups }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || "分頁存檔失敗（" + res.status + "）");
+    try { localStorage.setItem(GROUPS_KEY, JSON.stringify({ ts: Date.now(), data: body.groups })); } catch (e) {}
+    return body.groups;
   }
 
   function symbolOf(item) { return item.code || item.ticker; }
@@ -184,7 +210,7 @@
   }
 
   window.App = {
-    loadJSON, loadWatchlist, editWatchlist, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadIntraday, loadStockList, lookupStock, searchStocks,
+    loadJSON, loadWatchlist, editWatchlist, loadGroups, saveGroups, symbolOf, marketOf, findStock, loadStockData, loadLiveData, loadIntraday, loadStockList, lookupStock, searchStocks,
     isNum, fmtNum, fmtPrice, fmtRevenue, revenueUnit, fmtPct, upDown, cssVar, onThemeChange, isDark, setTheme, esc,
   };
 })();

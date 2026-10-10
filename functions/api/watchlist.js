@@ -24,7 +24,7 @@ export async function onRequestPost(ctx) {
   try { body = await request.json(); } catch (e) { return json({ error: "格式錯誤" }, 400); }
   const { action, market } = body || {};
   if (!["add", "remove"].includes(action) || !["tw", "us"].includes(market)) return json({ error: "格式錯誤" }, 400);
-  const many = action === "add" && Array.isArray(body.items);
+  const many = Array.isArray(body.items);  // 加入（匯入庫存）或移除（刪除自選股分頁）多檔，只產生一個 commit
   const items = (many ? body.items.slice(0, 200) : [body.item || {}]).map((x) => clean(market, x));
   if (!items.length || items.some((x) => !x)) return json({ error: "股票資料不正確" }, 400);
   const item = items[0];
@@ -56,10 +56,12 @@ export async function onRequestPost(ctx) {
       message = add.length === 1 ? "追蹤清單：新增 " + symOf(add[0]) + " " + add[0].name
         : "追蹤清單：匯入庫存，新增 " + add.length + " 檔（" + add.map(symOf).join("、") + "）";
     } else {
-      const before = list.length;
-      w[market] = list.filter((x) => !same(x));
-      if (w[market].length === before) return json({ ok: true, unchanged: true, watchlist: w });
-      message = "追蹤清單：移除 " + sym + " " + item.name;
+      const drop = new Set(items.map(symOf));
+      const removed = list.filter((x) => drop.has(symOf(x)));
+      w[market] = list.filter((x) => !drop.has(symOf(x)));
+      if (!removed.length) return json({ ok: true, unchanged: true, watchlist: w });
+      message = removed.length === 1 ? "追蹤清單：移除 " + symOf(removed[0]) + " " + removed[0].name
+        : "追蹤清單：移除 " + removed.length + " 檔（" + removed.map(symOf).join("、") + "）";
     }
 
     const put = await gh(env, "PUT", "/repos/" + repo + "/contents/" + PATH, {
