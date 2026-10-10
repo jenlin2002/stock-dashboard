@@ -103,8 +103,98 @@ def r2(x, n=2):
     return None if x is None else round(x, n)
 
 
+# ---- 公司基本資料（個股頁「公司資料」用）：data/all/profile.json ----
+# 證交所欄位是中文；櫃買是英文欄名（沒逐一核對過，用關鍵字比對，找不到就留空）
+PROFILE_FIELDS = ["full_name", "chairman", "gm", "spokesman", "founded", "listed", "capital", "par",
+                  "address", "phone", "website", "auditor", "transfer_agent", "email"]
+PROFILE_TW = {
+    "full_name": "公司名稱", "chairman": "董事長", "gm": "總經理", "spokesman": "發言人",
+    "founded": "成立日期", "listed": "上市日期", "capital": "實收資本額", "par": "普通股每股面額",
+    "address": "住址", "phone": "總機電話", "website": "網址", "auditor": "簽證會計師事務所",
+    "transfer_agent": "股票過戶機構", "email": "電子郵件信箱",
+}
+# 櫃買：(要包含的字, 不能包含的字)，比對時欄名轉小寫、只留英文字母
+PROFILE_TPEX = {
+    "full_name": (["companyname"], []),
+    "chairman": (["chairman"], []),
+    "gm": (["generalmanager"], []),
+    "spokesman": (["spokesman", "spokesperson"], ["deputy", "title", "acting"]),
+    "founded": (["incorporation", "establish", "founded"], []),
+    "listed": (["listing", "listed"], []),
+    "capital": (["paidin", "capital"], ["par"]),
+    "par": (["parvalue"], []),
+    "address": (["address"], ["email", "transfer", "english", "mail", "web"]),
+    "phone": (["telephone", "phone"], ["transfer", "fax"]),
+    "website": (["web", "url", "site"], []),
+    "auditor": (["accountingfirm", "accountant"], ["cpa"]),
+    "transfer_agent": (["stocktransferagent", "transferagent"], ["tel", "phone", "address"]),
+    "email": (["email"], []),
+}
+
+
+def fmt_date(v):
+    """'19830228'、'0720228'、'1983/02/28'、'72/02/28' → '1983-02-28'"""
+    s = str(v or "").strip()
+    parts = [p for p in s.replace("-", "/").replace(".", "/").split("/") if p]
+    if len(parts) == 3 and all(p.isdigit() for p in parts):
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+    elif s.isdigit() and len(s) in (6, 7, 8):
+        y, m, d = int(s[:-4]), int(s[-4:-2]), int(s[-2:])
+    else:
+        return s or None
+    if y < 1911:
+        y += 1911
+    return f"{y:04d}-{m:02d}-{d:02d}" if 1 <= m <= 12 and 1 <= d <= 31 else (s or None)
+
+
+def clean_text(v):
+    s = " ".join(str(v or "").split())
+    return None if s in ("", "-", "--", "無") else s
+
+
+def profile_of(x, market):
+    keys = list(x.keys())
+    out = []
+    for f in PROFILE_FIELDS:
+        v = None
+        if market == "TWSE":
+            v = x.get(PROFILE_TW[f])
+        else:
+            inc, exc = PROFILE_TPEX[f]
+            for k in keys:
+                nk = "".join(c for c in k.lower() if c.isalpha())
+                if any(w in nk for w in inc) and not any(w in nk for w in exc):
+                    v = x[k]
+                    break
+        if f in ("founded", "listed"):
+            v = fmt_date(v)
+        elif f == "capital":
+            v = num(v)
+            v = int(v) if v is not None else None
+        elif f == "par":
+            n = num("".join(c for c in str(v or "") if c.isdigit() or c == "."))
+            v = n
+        else:
+            v = clean_text(v)
+        out.append(v)
+    return out
+
+
+def write_profiles(profiles):
+    if not profiles:
+        warn("沒有公司基本資料，不更新 profile.json")
+        return
+    path = DATA / "all" / "profile.json"
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write('{"updated":' + json.dumps(today_str()) + ',"fields":' + json.dumps(PROFILE_FIELDS) + ',"rows":{\n')
+        f.write(",\n".join(json.dumps(c) + ":" + json.dumps(r, ensure_ascii=False, separators=(",", ":")) for c, r in sorted(profiles.items())))
+        f.write("\n}}\n")
+    log(f"all/profile.json：{len(profiles)} 家，{path.stat().st_size // 1024} KB")
+
+
 def main():
     stocks = {}
+    profiles = {}
 
     # ---- 公司（範圍） ----
     for market, url, code_k, name_k, shares_k in (
@@ -115,6 +205,10 @@ def main():
             code = str(x.get(code_k, "")).strip()
             if code:
                 stocks[code] = {"code": code, "name": str(x.get(name_k, "")).strip(), "market": market, "industry": None, "_shares": num(x.get(shares_k))}
+                try:
+                    profiles[code] = profile_of(x, market)
+                except Exception as e:
+                    warn(f"{code} 公司資料解析失敗：{e}")
     if not stocks:
         warn("抓不到公司清單，中止")
         return 1
@@ -298,6 +392,7 @@ def main():
         f.write('{"updated":' + json.dumps(out["updated"]) + ',"fields":' + json.dumps(FIELDS) + ',"rows":[\n')
         f.write(",\n".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) for r in rows))
         f.write("\n]}\n")
+    write_profiles(profiles)
     priced = sum(1 for s in stocks.values() if s.get("close"))
     log(f"all/stocks.json：{len(rows)} 家（有收盤價 {priced}），{path.stat().st_size // 1024} KB")
     return 0

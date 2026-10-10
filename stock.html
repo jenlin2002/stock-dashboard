@@ -100,7 +100,7 @@
       <div class="body" id="w-fund"></div>
     </section>
     <section class="panel">
-      <h3>公司簡介（TradingView）</h3>
+      <h3 id="h-profile">公司簡介（TradingView）</h3>
       <div class="body" id="w-profile"></div>
     </section>
   </div>
@@ -151,10 +151,43 @@
   document.getElementById("tag").textContent = TV.tvSymbol(item);
   document.title = item.name + "｜台美股看盤";
   document.getElementById("tvlink").href = TV.chartUrl(item);
-  try { localStorage.setItem("last-symbol", App.symbolOf(item)); } catch (e) {}  // 左側選單「個股分析」回到最後看的那檔
+  try { localStorage.setItem("last-symbol", App.symbolOf(item)); } catch (e) {}
+
+  // 公司資料：data/all/profile.json（scripts/build_all.py 每天從證交所、櫃買 OpenAPI 產生）
+  async function companyProfile(it) {
+    const [p, all] = await Promise.all([App.loadJSON("data/all/profile.json"), Refs.load().catch(() => null)]);
+    const row = p.rows[it.code];
+    if (!row) throw new Error("no profile");
+    const d = Object.fromEntries(p.fields.map((f, i) => [f, row[i]]));
+    const s = all && all.byCode[it.code];
+    const yrs = (date) => { const t = Date.parse(date); return isFinite(t) ? "（" + Math.floor((Date.now() - t) / 3.15576e10) + " 年）" : ""; };
+    const site = d.website ? (/^https?:\/\//i.test(d.website) ? d.website : "https://" + d.website) : null;
+    const rowsHtml = [
+      ["公司名稱", App.esc(d.full_name || it.name)],
+      ["市場／產業", (s ? (s.market === "TPEX" ? "上櫃" : "上市") + (s.industry ? "・" + App.esc(s.industry) : "") : App.esc(it.market === "TPEX" ? "上櫃" : "上市"))],
+      ["董事長", App.esc(d.chairman)],
+      ["總經理", App.esc(d.gm)],
+      ["發言人", App.esc(d.spokesman)],
+      ["成立日期", d.founded ? App.esc(d.founded) + yrs(d.founded) : null],
+      [(s && s.market === "TPEX") || it.market === "TPEX" ? "上櫃日期" : "上市日期", d.listed ? App.esc(d.listed) + yrs(d.listed) : null],
+      ["實收資本額", App.isNum(d.capital) ? App.fmtNum(d.capital / 1e8, 2) + " 億元" + (App.isNum(d.par) && d.par ? "（約 " + App.fmtNum(d.capital / d.par / 1000, 0) + " 張）" : "") : null],
+      ["市值", s && App.isNum(s.mktcap) ? App.fmtNum(s.mktcap / 1e8, 0) + " 億元" : null],
+      ["地址", App.esc(d.address)],
+      ["電話", App.esc(d.phone)],
+      ["網站", site ? '<a href="' + App.esc(site) + '" target="_blank" rel="noopener">' + App.esc(d.website) + "</a>" : null],
+      ["簽證會計師", App.esc(d.auditor)],
+      ["股務代理", App.esc(d.transfer_agent)],
+    ].filter((r) => r[1]);
+    document.getElementById("h-profile").textContent = "公司資料";
+    document.getElementById("w-profile").innerHTML =
+      '<div class="co-profile"><table>' + rowsHtml.map((r) => "<tr><th>" + r[0] + "</th><td>" + r[1] + "</td></tr>").join("") + "</table>" +
+      '<p class="updated">資料來源：證交所／櫃買中心 OpenAPI（' + App.esc(p.updated) + "）。營業項目請按上方「在 TradingView 開啟」或查公開資訊觀測站。</p></div>";
+  }  // 左側選單「個股分析」回到最後看的那檔
 
   TV.fundamentals(document.getElementById("w-fund"), item);
-  TV.profile(document.getElementById("w-profile"), item);
+  // 台股用證交所／櫃買的公司基本資料（TradingView 很多台股沒有公司介紹）；沒有資料才用 TradingView
+  if (item.code) companyProfile(item).catch(() => TV.profile(document.getElementById("w-profile"), item));
+  else TV.profile(document.getElementById("w-profile"), item);
   if (item.code) Refs.render(document.getElementById("refs"), item.code).then((ok) => { document.getElementById("p-refs").hidden = !ok; });
 
   // 追蹤清單的股票讀排程抓好的檔案；其他股票（或檔案還沒產生）即時查詢
