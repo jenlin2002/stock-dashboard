@@ -68,13 +68,14 @@
     }, extra || {}));
   }
 
-  // K 線下面三格：成交量（固定）＋副圖一、副圖二（本人可各選一個技術指標）
-  const SUB_TYPES = [["dmi", "DMI"], ["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["none", "不顯示"]];
+  // K 線下面三格：成交量（可關掉）＋副圖一、副圖二（本人可各選成交量或一個技術指標）
+  const SUB_TYPES = [["vol", "成交量"], ["dmi", "DMI"], ["kd", "KD"], ["rsi", "RSI"], ["macd", "MACD"], ["none", "不顯示"]];
   const DEFAULT_SUBS = ["vol", "dmi", "rsi"];
-  // 讀設定：回傳 ["vol", 副圖一, 副圖二]（舊設定只有 opts.sub 一個：當副圖一）
+  // 讀設定：回傳 [成交量格 "vol"|"none", 副圖一, 副圖二]（舊設定只有 opts.sub 一個：當副圖一）
   function subsOf(opts) {
     const ok = (x) => SUB_TYPES.some(([k]) => k === x);
-    if (Array.isArray(opts.subs) && opts.subs.length === 3 && ok(opts.subs[1]) && ok(opts.subs[2])) return ["vol", opts.subs[1], opts.subs[2]];
+    const s = opts.subs;
+    if (Array.isArray(s) && s.length === 3 && ok(s[1]) && ok(s[2])) return [s[0] === "none" ? "none" : "vol", s[1], s[2]];
     if (opts.sub && ok(opts.sub)) return ["vol", opts.sub, opts.sub === "rsi" ? "dmi" : "rsi"];
     return DEFAULT_SUBS.slice();
   }

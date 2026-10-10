@@ -415,6 +415,7 @@ stock-dashboard/
 **三個副圖＋「⚙ 設定」（2026-10-10，本人要求）**：
 - K 線下面分成三格：成交量（固定）、副圖一、副圖二。三格都能拖拉調整高度。
 - 副圖一、副圖二的技術指標（DMI、KD、RSI、MACD、不顯示）在「⚙ 設定」對話框裡選，這個按鈕原本叫「⚙ 均線設定」。設定存在 `kline-opts-v2.subs = ["vol", 副圖一, 副圖二]`，預設是 DMI、RSI；舊設定 `sub` 會自動換成副圖一。
+- 追加（本人要求）：「⚙ 設定」可以關掉 K 線下方那格成交量（`subs[0]` 是 `"vol"` 或 `"none"`）；副圖一、副圖二的選項也加了「成交量」。
 - `Charts.kline(hosts{price, subs:[3 個 div]})`，圖例由 `k.indLegend(i)` 產生。
 - 高度存在 `pane-h-stock3`、`pane-h-market3-tw`、`pane-h-market3-us`。
 

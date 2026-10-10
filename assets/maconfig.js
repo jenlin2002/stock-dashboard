@@ -6,7 +6,10 @@
   let dlg = null, work = null, done = null, subs = null;
 
   function subsHtml() {
-    return ["副圖一", "副圖二"].map((name, j) =>
+    return "<tr><td>成交量（K 線下方）</td><td>" + '<select data-subi="0" aria-label="K 線下方的成交量">' +
+        [["vol", "顯示"], ["none", "不顯示"]].map(([k, t]) => '<option value="' + k + '"' + (subs[0] === k ? " selected" : "") + ">" + t + "</option>").join("") +
+      "</select></td></tr>" +
+      ["副圖一", "副圖二"].map((name, j) =>
       "<tr><td>" + name + '</td><td><select data-subi="' + (j + 1) + '" aria-label="' + name + '指標">' +
         Charts.SUB_TYPES.map(([k, t]) => '<option value="' + k + '"' + (subs[j + 1] === k ? " selected" : "") + ">" + t + "</option>").join("") +
       "</select></td></tr>").join("");
@@ -38,7 +41,7 @@
     dlg.innerHTML =
       '<form method="dialog" class="dlg">' +
         '<h3 id="ma-dlg-title">設定</h3>' +
-        '<h4>副圖（成交量下面兩格）</h4><table class="ma-tbl"><tbody data-list="subs"></tbody></table>' +
+        '<h4>K 線下方的圖</h4><table class="ma-tbl"><tbody data-list="subs"></tbody></table>' +
         '<h4>K 線均線</h4><table class="ma-tbl"><thead><tr><th>顯示</th><th>天數</th><th>顏色</th><th>粗細</th><th></th></tr></thead><tbody data-list="ma"></tbody></table>' +
         '<button type="button" class="btn" data-add="ma">＋ 新增均線</button>' +
         '<h4>均量線（成交量）</h4><table class="ma-tbl"><thead><tr><th>顯示</th><th>天數</th><th>顏色</th><th>粗細</th><th></th></tr></thead><tbody data-list="vol"></tbody></table>' +
@@ -52,7 +55,7 @@
 
     // 欄位變更直接寫回 work
     dlg.addEventListener("input", (e) => {
-      if (e.target.dataset.subi) { subs[+e.target.dataset.subi] = e.target.value; return; }
+      if (e.target.dataset.subi != null) { subs[+e.target.dataset.subi] = e.target.value; return; }
       const tr = e.target.closest("tr[data-kind]");
       if (!tr) return;
       const m = work[tr.dataset.kind][+tr.dataset.i], f = e.target.dataset.f;
