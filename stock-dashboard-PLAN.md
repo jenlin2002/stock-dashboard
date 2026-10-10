@@ -1,5 +1,46 @@
 # 台美股基本面網站：執行計畫
 
+## 主頁＋A／B／C 三種版面（2026-10-11，依 LAYOUT-SPEC.md 第 9 節）
+
+**進度**：第 1～6 步完成（commit「版面切換第 N 步」）；**第 7 步（補新資料）還沒做**。
+1. 頁首版面切換 `assets/layout-switch.js`：所有頁面右上「主頁｜A 指揮中心｜B 工作台｜C 選股」（手機縮成 ⌂ A B C）。
+   - 切換時用網址參數帶著 market、symbol。
+   - localStorage：`sd.layout`、`sd.rememberLayout`；另外 A 版有 `sd.market`。
+   - 鍵盤 g h／g a／g b／g c。
+2. 主頁 `index.html`：大盤列、三張版面卡、「記住版面」、功能對照表。
+   - 「我的追蹤」搬到 `watchlist.html`。
+   - 舊網址 `index.html#hold`、`#tw`、`#us`、`#gN` 會轉到 watchlist.html。
+   - logo 和「主頁」都帶 `?home=1`。
+3. 共用區塊：`assets/data.js`（JSON 快取）、`assets/mount.js`（掃描 `data-widget` 掛載）、`assets/widgets/*.js`。
+   - 區塊：kline、heatmap、watchlist、pegCard、deduct、ticker、kpis、screener、chips、calendar、marketCard、sectorRank、stockFaces、screenerForm、funnel、stockDrawer、dualMarket。
+   - 工具：AddFav（加入自選）、StockPicker（股票選擇框）。
+   - `Charts.kline` 多了 `destroy()`，同一頁可以放好幾張 K 線。
+4. A 版 `layout-a.html`：預設深色。
+5. B 版 `layout-b.html`：預設淺色，9 個 #hash 分頁，第一次打開才掛載，頂部「目前個股」。
+6. C 版 `layout-c.html`：三欄，左欄深藍；策略漏斗、個股抽屜。四面評分暫行公式在 `assets/scoring.js`。
+
+**和 LAYOUT-SPEC 不同的地方**
+- 檔案放在 `assets/`（不是 `js/`、`css/`），樣式都在 `assets/style.css`（沒有拆成 theme／layout 檔）。header.js 的功能由既有的 `layout.js`（頁首、深淺色）、`search.js`、`layout-switch.js` 分擔。
+  - 版面頁的 body 加 `class="no-side"`，就不放左側選單。
+- 自選股分頁是「自選1～自選10」（沿用現有 config/groups.json，可以增減），不是 1–8。
+  - 規格說自選股「存瀏覽器」，實際上分頁存在 GitHub 的 config/groups.json，庫存股才存瀏覽器。
+  - 「加入自選」寫進同一份 groups.json。
+  - 庫存股要股數和成本，所以「加入自選」選單不列庫存股，請用匯入。
+- 既有頁面（stock.html、market.html）的 K 線、熱力圖程式沒有改成用 widgets，避免弄壞；widgets 是從它們複製整理出來的。
+- 深淺色：A 預設深、B／C 預設淺；只要使用者按過切換鈕（localStorage `theme`），所有頁面都照使用者選的。
+- 需要新資料的項目先顯示「待補」，不放假資料：
+  - EPS 連 3 季成長、外資連買、站上季線、融資減股價漲
+  - 5 日、20 日類股漲跌
+  - 個股籌碼、行事曆、美股選股欄位
+  - 四面評分的技術面、籌碼面
+
+**第 7 步要做（依序）**
+1. `data/screener-tw.json`：每季 EPS 歷史、全市場均線狀態。
+2. 美股選股欄位。
+3. 個股籌碼（法人 5 日、融資）。
+4. `data/calendar.json`。
+5. 補完 `scoring.js` 的技術面、籌碼面。
+
 ## 最新交接（2026-10-10 晚，手機作業；請先讀這段）
 
 **對本人的溝通方式**
