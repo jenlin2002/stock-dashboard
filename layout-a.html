@@ -5,27 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>A 指揮中心｜台美股看盤</title>
-<script>try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<!-- A 版預設深色；使用者手動切過（localStorage theme）就照使用者的 -->
+<script>try { document.documentElement.dataset.theme = localStorage.getItem("theme") || "dark"; } catch (e) { document.documentElement.dataset.theme = "dark"; }</script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
-<body>
+<body class="no-side lp lp-a">
 <header class="topbar">
   <h1><a href="index.html?home=1">台美股看盤</a></h1>
   <nav><a href="watchlist.html">追蹤清單</a><a href="compare.html">比較</a></nav>
 </header>
 
-<main class="wide">
-  <section class="panel">
-    <h3>A 指揮中心（建置中）</h3>
-    <p class="note">這個版面依 LAYOUT-SPEC.md 第 9 節的順序製作中。現有功能都在左側選單：大盤、全台股總表、個股分析、我的追蹤、比較表。</p>
-  </section>
+<!-- 市場切換＋選單 -->
+<div class="lp-bar">
+  <div class="seg" role="group" aria-label="市場" id="mk-seg">
+    <button type="button" data-mk="tw">台股</button><button type="button" data-mk="us">美股</button><button type="button" data-mk="both">雙市場</button>
+  </div>
+  <nav class="lp-menu" aria-label="A 版選單">
+    <a href="#a-overview">總覽</a><a href="#a-heat">類股</a><a href="#a-screener">選股器</a><a id="m-stock" href="stock.html">個股分析</a>
+    <a href="compare.html">比較表</a><a href="#a-cal">行事曆</a><a href="all.html">全台股總表</a><a href="watchlist.html">我的追蹤</a>
+  </nav>
+</div>
+<section class="lp-ticker" data-widget="ticker" aria-label="指數跑馬燈"></section>
+
+<main class="lp-a-grid">
+  <div class="lp-main">
+    <section id="a-overview" data-widget="kpis"></section>
+    <section id="a-kline" data-widget="kline" data-market="idx" data-symbol="TWII" data-height="360"></section>
+    <section id="a-heat" class="panel" data-widget="heatmap" data-view="sector" data-size="turnover" data-height="380"></section>
+    <section id="a-heat-us" class="panel" data-widget="heatmap" data-market="us" data-view="sector" data-height="380" data-fixed="true" hidden></section>
+    <section id="a-screener" class="panel" data-widget="screener"></section>
+  </div>
+  <aside class="lp-side" aria-label="右欄">
+    <section class="panel" data-widget="chips"></section>
+    <section class="panel" data-widget="watchlist"></section>
+    <section id="a-cal" class="panel" data-widget="calendar"></section>
+  </aside>
 </main>
 
-<footer>資料僅供參考，不構成投資建議。</footer>
+<footer>資料僅供參考，不構成投資建議。資料來源：FinMind、證交所、櫃買中心、期交所、公開資訊觀測站、Yahoo Finance、Nasdaq、富果。</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/layout.js"></script>
 <script src="assets/layout-switch.js"></script>
 <script src="assets/search.js"></script>
+<script src="assets/indicators.js"></script>
+<script src="assets/charts.js"></script>
+<script src="assets/maconfig.js"></script>
+<script src="assets/live.js"></script>
+<script src="assets/refs.js"></script>
+<script src="assets/holdings.js"></script>
+<script src="assets/heatmap.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/mount.js"></script>
+<script src="assets/widgets/ticker.js"></script>
+<script src="assets/widgets/kpis.js"></script>
+<script src="assets/widgets/deduct.js"></script>
+<script src="assets/widgets/kline.js"></script>
+<script src="assets/widgets/heatmap.js"></script>
+<script src="assets/widgets/screener.js"></script>
+<script src="assets/widgets/chips.js"></script>
+<script src="assets/widgets/watchlist.js"></script>
+<script src="assets/widgets/calendar.js"></script>
+<script src="assets/widgets/addfav.js"></script>
+<script>
+(function () {
+  // 狀態：市場（網址 ?market=，沒有就用上次的）、股票（網址 ?symbol=，給「個股分析」和切版面帶著走）
+  const q = new URLSearchParams(location.search);
+  let market = q.get("market");
+  if (!["tw", "us", "both"].includes(market)) { try { market = localStorage.getItem("sd.market") || "tw"; } catch (e) { market = "tw"; } }
+  if (!["tw", "us", "both"].includes(market)) market = "tw";
+  const symbol = (q.get("symbol") || (() => { try { return localStorage.getItem("last-symbol"); } catch (e) { return null; } })() || "2330").toUpperCase();
+  LayoutSwitch.setState({ market, symbol });
+  document.getElementById("m-stock").href = "stock.html?symbol=" + encodeURIComponent(symbol);
+
+  const segBtns = document.querySelectorAll("#mk-seg button");
+  function apply(first) {
+    segBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mk === market)));
+    document.getElementById("a-heat-us").hidden = market !== "both";
+    const heatMk = market === "us" ? "us" : "tw";
+    const idx = market === "us" ? "GSPC" : "TWII";
+    if (first) {
+      document.getElementById("a-heat").dataset.market = heatMk;
+      document.getElementById("a-kline").dataset.symbol = idx;
+      Widgets.mount(document, { market });
+      return;
+    }
+    // 換市場：各區塊更新；大盤 K 線換成該市場的指數
+    document.querySelectorAll("[data-widget]").forEach((el) => {
+      const w = el._widget;
+      if (!w || !w.update || el.dataset.fixed) return;
+      if (el.id === "a-kline") w.update({ market: "idx", symbol: idx, forceSymbol: true });
+      else if (el.id === "a-heat") w.update({ market: heatMk });
+      else w.update({ market });
+    });
+  }
+  segBtns.forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.mk === market) return;
+    market = b.dataset.mk;
+    try { localStorage.setItem("sd.market", market); } catch (e) {}
+    LayoutSwitch.setState({ market });
+    const u = new URL(location.href);
+    u.searchParams.set("market", market);
+    history.replaceState(null, "", u);
+    apply(false);
+  }));
+  apply(true);
+})();
+</script>
 </body>
 </html>

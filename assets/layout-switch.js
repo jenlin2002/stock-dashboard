@@ -76,7 +76,10 @@
 
   window.LayoutSwitch = {
     LAYOUTS, current, store,
-    setState(s) { window.SD_STATE = Object.assign({}, window.SD_STATE || {}, s); },
+    setState(s) {
+      window.SD_STATE = Object.assign({}, window.SD_STATE || {}, s);
+      document.querySelectorAll(".layout-switch a[data-l]").forEach((a) => { a.href = hrefOf(LAYOUTS.find((L) => L.key === a.dataset.l)); });
+    },
     hrefOf: (key) => hrefOf(LAYOUTS.find((L) => L.key === key)),
     mount,
   };
