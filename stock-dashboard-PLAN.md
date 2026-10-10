@@ -28,18 +28,26 @@
   - 庫存股要股數和成本，所以「加入自選」選單不列庫存股，請用匯入。
 - 既有頁面（stock.html、market.html）的 K 線、熱力圖程式沒有改成用 widgets，避免弄壞；widgets 是從它們複製整理出來的。
 - 深淺色：A 預設深、B／C 預設淺；只要使用者按過切換鈕（localStorage `theme`），所有頁面都照使用者選的。
-- 需要新資料的項目先顯示「待補」，不放假資料：
-  - EPS 連 3 季成長、外資連買、站上季線、融資減股價漲
-  - 5 日、20 日類股漲跌
-  - 個股籌碼、行事曆、美股選股欄位
-  - 四面評分的技術面、籌碼面
+- 資料檔還沒產生時，相關選項會灰掉並寫「待補」，不放假資料。
 
-**第 7 步要做（依序）**
-1. `data/screener-tw.json`：每季 EPS 歷史、全市場均線狀態。
-2. 美股選股欄位。
-3. 個股籌碼（法人 5 日、融資）。
-4. `data/calendar.json`。
-5. 補完 `scoring.js` 的技術面、籌碼面。
+**第 7 步：新資料（都由 GitHub Actions 每天產生）**
+1. `scripts/build_screener.py` → `data/screener-tw.json`（約 200 KB）：均線 5／20／60、站上季線、多頭排列、5／20 日漲跌、量比、60 日新高、外資連買天數、法人 5 日、融資 1／5 日增減、單季 EPS 與連續年增季數、大戶持股（≥1,000 張，集保每週）、借券賣出餘額。
+   - 來源：證交所 MI_INDEX、T86、MI_MARGN、TWT93U；櫃買 dailyQuotes、insti、margin、sbl；集保 opendata 1-5；公開資訊觀測站 t163sb04。都是一次拿全部股票的批次資料。
+   - 原始歷史放 `.cache/`（gitignore），workflow 用 actions/cache 保留。**第一次跑或快取不見時會往回補約 70 個交易日，大約 10 分鐘**；之後每天只抓當天。每季 EPS 存在 `data/all/eps_q.json`。
+   - 台股排程那次跑（台灣時間 16:00）。
+2. `scripts/build_us_screener.py` → `data/screener-us.json`：EPS（近四季）、EPS 成長、本益比、PEG、營收成長、自由現金流率、Rule of 40。
+   - 來源：SEC XBRL frames，第四季用全年減前三季補。
+   - 美股排程那次跑，要設 SEC_USER_AGENT。
+3. 個股籌碼：沒有寫進每檔的個股 JSON（規格寫的位置），改放在全市場一份的 screener-tw.json，所有股票都有，不限追蹤清單。個股頁新增「籌碼」區塊（只有台股）。
+4. `scripts/build_calendar.py` → `data/calendar.json`：除權息預告、法說會（本月和下個月）、營收 10 日、財報截止、台指期結算、FOMC。
+   - **FOMC 日期寫在程式裡，只有 2026 年；2027 年要補**（Fed 網站 fomccalendars.htm）。
+5. `assets/scoring.js` 四面評分（0–100，全市場百分位），公式寫在 B、C 頁尾：
+   - 基本面＝ROE、EPS 成長、月營收年增
+   - 評價＝本益比、PEG、殖利率（越便宜越高）
+   - 技術面＝20 日漲跌、距季線、均線排列
+   - 籌碼面＝法人 5 日買超佔市值、外資連買天數、融資 5 日減少
+   - 美股只有基本面和評價。
+- `assets/data.js` 的 `Data.twAll()`、`Data.usAll()` 會把這兩份選股資料合併進總表的每一列，所以所有區塊都能直接用這些欄位。
 
 ## 最新交接（2026-10-10 晚，手機作業；請先讀這段）
 
